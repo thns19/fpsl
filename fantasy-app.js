@@ -21,7 +21,9 @@ function formatPlayerForm(player) {
 }
 
 const FANTASY_DB_URL = 'https://ptchbl4-default-rtdb.europe-west1.firebasedatabase.app/.json';
+const FANTASY_ADMIN_USERNAME = 'pitchball';
 let fantasyDbCache = null;
+let fantasyMatchday = null;
 
 async function getFantasyDb() {
   if (fantasyDbCache) return fantasyDbCache;
@@ -29,6 +31,42 @@ async function getFantasyDb() {
   if (!response.ok) throw new Error('Unable to connect to the account service.');
   fantasyDbCache = await response.json();
   return fantasyDbCache;
+}
+
+async function loadFantasyState() {
+  try {
+    const db = await getFantasyDb();
+    fantasyMatchday = db.fantasyMatchday || null;
+    const remotePlayers = db.fantasyPlayers || {};
+    FANTASY_PLAYERS.forEach((player) => {
+      if (remotePlayers[player.id]) Object.assign(player, remotePlayers[player.id]);
+    });
+  } catch (error) {
+    fantasyMatchday = null;
+  }
+}
+
+async function saveFantasyDb(db) {
+  const response = await fetch(FANTASY_DB_URL, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(db)
+  });
+  if (!response.ok) throw new Error('Unable to save fantasy data.');
+  fantasyDbCache = db;
+}
+
+function isFantasyAdmin() {
+  const user = getCurrentFantasyUser();
+  return Boolean(user && (user.isAdmin || user.username.toLowerCase() === FANTASY_ADMIN_USERNAME));
+}
+
+function transfersAreLocked() {
+  return fantasyMatchday?.status === 'active' && !isFantasyAdmin();
+}
+
+function showTransferLockMessage() {
+  alert('Transfers are locked while the matchday is active.');
 }
 
 async function hashFantasyPassword(password) {
@@ -118,16 +156,16 @@ async function submitFantasyAuth(form) {
       });
       if (!response.ok) throw new Error('Unable to create the account.');
       fantasyDbCache = { ...db, users };
-      localStorage.setItem(FANTASY_SESSION_KEY, JSON.stringify({ username, email, avatar: null }));
+      localStorage.setItem(FANTASY_SESSION_KEY, JSON.stringify({ username, email, avatar: null, isAdmin: username.toLowerCase() === FANTASY_ADMIN_USERNAME }));
     } else {
       const user = Object.values(users).find((entry) =>
-        entry.username.toLowerCase() === usernameOrEmail.toLowerCase() || entry.email.toLowerCase() === usernameOrEmail.toLowerCase()
+        entry.username.toLowerCase() === usernameOrEmail.toLowerCase() || String(entry.email || '').toLowerCase() === usernameOrEmail.toLowerCase()
       );
       if (!user || user.passHash !== passwordHash) {
         setFantasyAuthError('Incorrect username/email or password.');
         return;
       }
-      localStorage.setItem(FANTASY_SESSION_KEY, JSON.stringify({ username: user.username, email: user.email, avatar: user.avatar || null }));
+      localStorage.setItem(FANTASY_SESSION_KEY, JSON.stringify({ username: user.username, email: user.email, avatar: user.avatar || null, isAdmin: user.username.toLowerCase() === FANTASY_ADMIN_USERNAME }));
     }
 
     document.getElementById('fantasy-auth-overlay').classList.remove('visible');
@@ -140,7 +178,8 @@ async function submitFantasyAuth(form) {
   }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadFantasyState();
   const navLinks = document.querySelectorAll('.nav-link');
   navLinks.forEach((link) => {
     if (link.href === window.location.href || link.getAttribute('href') === window.location.pathname.split('/').pop()) {
@@ -191,6 +230,19 @@ document.addEventListener('DOMContentLoaded', () => {
     signInButton.textContent = `Signed in: ${getCurrentFantasyUser().username}`;
   }
 
+  if (isFantasyAdmin()) {
+    document.querySelectorAll('.topnav').forEach((nav) => {
+      if (!nav.querySelector('[data-admin-link]')) {
+        const adminLink = document.createElement('a');
+        adminLink.href = 'fantasy-admin.html';
+        adminLink.className = 'nav-link';
+        adminLink.dataset.adminLink = 'true';
+        adminLink.textContent = 'Admin';
+        nav.appendChild(adminLink);
+      }
+    });
+  }
+
   if (document.body.dataset.page === 'build') {
     initBuildPage();
   }
@@ -201,6 +253,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (document.body.dataset.page === 'players') {
     renderPlayersTable();
+  }
+
+  if (document.body.dataset.page === 'admin') {
+    initAdminPage();
   }
 });
 
@@ -305,6 +361,10 @@ window.togglePlayerTeam = function (playerId) {
   if (!ensureFantasyLogin()) {
     return;
   }
+  if (transfersAreLocked()) {
+    showTransferLockMessage();
+    return;
+  }
 
   const team = getStoredFantasyTeam();
   if (team.includes(playerId)) {
@@ -332,6 +392,10 @@ window.removePlayerFromTeam = function (playerId) {
   if (!ensureFantasyLogin()) {
     return;
   }
+  if (transfersAreLocked()) {
+    showTransferLockMessage();
+    return;
+  }
   const team = getStoredFantasyTeam().filter((id) => id !== playerId);
   saveFantasyTeam(team);
   renderBuildBoard();
@@ -339,6 +403,10 @@ window.removePlayerFromTeam = function (playerId) {
 
 window.makeSubPlayer = function (event, playerId) {
   if (!ensureFantasyLogin()) {
+    return;
+  }
+  if (transfersAreLocked()) {
+    showTransferLockMessage();
     return;
   }
   event.preventDefault();
@@ -355,8 +423,12 @@ window.makeSubPlayer = function (event, playerId) {
   renderBuildBoard();
 };
 
-window.saveFantasyTeamToStorage = function () {
+window.saveFantasyTeamToStorage = async function () {
   if (!ensureFantasyLogin()) {
+    return;
+  }
+  if (transfersAreLocked()) {
+    showTransferLockMessage();
     return;
   }
   const team = getStoredFantasyTeam();
@@ -377,41 +449,63 @@ window.saveFantasyTeamToStorage = function () {
     alert('Your squad must include 4 starters and 1 substitute.');
     return;
   }
-  alert('Team saved successfully.');
+  try {
+    const user = getCurrentFantasyUser();
+    const db = await getFantasyDb();
+    const users = db.users || {};
+    const accountKey = user.username.toLowerCase();
+    if (!users[accountKey]) {
+      throw new Error('Your account could not be found. Please sign in again.');
+    }
+
+    users[accountKey] = { ...users[accountKey], fantasyTeam: team };
+    await saveFantasyDb({ ...db, users });
+    alert('Team saved successfully.');
+  } catch (error) {
+    alert(error.message || 'Unable to save your team. Please try again.');
+  }
 };
 
-function renderLeaderboard() {
+async function renderLeaderboard() {
   const table = document.getElementById('leaderboardTable');
   if (!table) return;
 
-  const user = getCurrentFantasyUser();
-  const rows = [...SAMPLE_LEADERBOARD];
-  if (user) {
-    rows.push({ username: user.username, total: 81, matchday: 22 });
-  }
+  table.innerHTML = '<tbody><tr><td colspan="4">Loading rankings...</td></tr></tbody>';
+  try {
+    const currentUser = getCurrentFantasyUser();
+    const db = await getFantasyDb();
+    const rows = Object.values(db.users || {})
+      .filter((user) => Array.isArray(user.fantasyTeam) && user.fantasyTeam.length === FANTASY_TEAM_SIZE)
+      .map((user) => ({
+        username: user.username,
+        total: Number(user.fantasyPoints) || 0,
+        matchday: Number(user.matchday) || 0
+      }))
+      .sort((a, b) => b.total - a.total);
 
-  rows.sort((a, b) => b.total - a.total);
-
-  table.innerHTML = `
-    <thead>
-      <tr>
-        <th>Rank</th>
-        <th>Manager</th>
-        <th>Matchday</th>
-        <th>Total</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${rows.map((entry, index) => `
+    table.innerHTML = `
+      <thead>
         <tr>
-          <td>#${index + 1}</td>
-          <td>${entry.username}${user && entry.username === user.username ? ' (You)' : ''}</td>
-          <td>${entry.matchday}</td>
-          <td>${entry.total}</td>
+          <th>Rank</th>
+          <th>Manager</th>
+          <th>Matchday</th>
+          <th>Total</th>
         </tr>
-      `).join('')}
-    </tbody>
-  `;
+      </thead>
+      <tbody>
+        ${rows.length === 0 ? '<tr><td colspan="4">No teams have been submitted yet.</td></tr>' : rows.map((entry, index) => `
+          <tr>
+            <td>#${index + 1}</td>
+            <td>${entry.username}${currentUser && entry.username === currentUser.username ? ' (You)' : ''}</td>
+            <td>${entry.matchday}</td>
+            <td>${entry.total}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    `;
+  } catch (error) {
+    table.innerHTML = '<tbody><tr><td colspan="4">Unable to load rankings right now.</td></tr></tbody>';
+  }
 }
 
 function renderPlayersTable() {
@@ -444,4 +538,127 @@ function renderPlayersTable() {
       `).join('')}
     </tbody>
   `;
+}
+
+function renderAdminState() {
+  const status = document.getElementById('admin-matchday-status');
+  const startButton = document.getElementById('admin-start-matchday');
+  const endButton = document.getElementById('admin-end-matchday');
+  if (!status) return;
+
+  if (!fantasyMatchday) {
+    status.textContent = 'No matchday created';
+    if (startButton) startButton.disabled = true;
+    if (endButton) endButton.disabled = true;
+    return;
+  }
+
+  status.textContent = `Matchday ${fantasyMatchday.id}: ${fantasyMatchday.name} (${fantasyMatchday.status})`;
+  if (startButton) startButton.disabled = fantasyMatchday.status !== 'draft';
+  if (endButton) endButton.disabled = fantasyMatchday.status !== 'active';
+}
+
+function renderAdminPlayers() {
+  const container = document.getElementById('admin-player-list');
+  if (!container) return;
+  container.innerHTML = FANTASY_PLAYERS.map((player) => `
+    <div class="admin-player-row" data-player-id="${player.id}">
+      <strong>${player.name}</strong>
+      <label>Goals <input type="number" min="0" value="${Number(player.goals) || 0}" data-stat="goals"></label>
+      <label>Own goals <input type="number" min="0" value="${Number(player.ownGoals) || 0}" data-stat="ownGoals"></label>
+      <label>MVPs <input type="number" min="0" value="${Number(player.mvps) || 0}" data-stat="mvps"></label>
+      <label>Matchday points <input type="number" value="${Number(player.matchdayPoints) || 0}" data-stat="matchdayPoints"></label>
+    </div>
+  `).join('');
+}
+
+async function createFantasyMatchday() {
+  if (!isFantasyAdmin()) return;
+  const nameInput = document.getElementById('admin-matchday-name');
+  const name = nameInput.value.trim();
+  if (!name) {
+    alert('Enter a matchday name first.');
+    return;
+  }
+  if (fantasyMatchday?.status === 'active') {
+    alert('End the active matchday before creating another one.');
+    return;
+  }
+  const db = await getFantasyDb();
+  fantasyMatchday = {
+    id: Number(fantasyMatchday?.id || 0) + 1,
+    name,
+    status: 'draft',
+    createdAt: new Date().toISOString()
+  };
+  await saveFantasyDb({ ...db, fantasyMatchday });
+  renderAdminState();
+}
+
+async function startFantasyMatchday() {
+  if (!isFantasyAdmin() || !fantasyMatchday || fantasyMatchday.status !== 'draft') return;
+  const db = await getFantasyDb();
+  fantasyMatchday = { ...fantasyMatchday, status: 'active', startedAt: new Date().toISOString() };
+  await saveFantasyDb({ ...db, fantasyMatchday });
+  renderAdminState();
+}
+
+async function endFantasyMatchday() {
+  if (!isFantasyAdmin() || !fantasyMatchday || fantasyMatchday.status !== 'active') return;
+  const db = await getFantasyDb();
+  const players = db.fantasyPlayers || {};
+  const users = { ...(db.users || {}) };
+  Object.keys(users).forEach((accountKey) => {
+    const user = users[accountKey];
+    if (!Array.isArray(user.fantasyTeam) || user.fantasyTeam.length !== FANTASY_TEAM_SIZE) return;
+    const points = user.fantasyTeam.reduce((total, playerId) => total + (Number(players[playerId]?.matchdayPoints) || 0), 0);
+    users[accountKey] = {
+      ...user,
+      fantasyPoints: (Number(user.fantasyPoints) || 0) + points,
+      matchday: fantasyMatchday.id
+    };
+  });
+  fantasyMatchday = { ...fantasyMatchday, status: 'ended', endedAt: new Date().toISOString() };
+  await saveFantasyDb({ ...db, users, fantasyMatchday });
+  renderAdminState();
+  alert('Matchday ended and points were added to submitted teams.');
+}
+
+async function saveFantasyPlayerStats() {
+  if (!isFantasyAdmin()) return;
+  const db = await getFantasyDb();
+  const fantasyPlayers = { ...(db.fantasyPlayers || {}) };
+  document.querySelectorAll('.admin-player-row').forEach((row) => {
+    const playerId = row.dataset.playerId;
+    const stats = {};
+    row.querySelectorAll('[data-stat]').forEach((input) => {
+      stats[input.dataset.stat] = Number(input.value) || 0;
+    });
+    const existing = fantasyPlayers[playerId] || {};
+    fantasyPlayers[playerId] = { ...existing, ...stats };
+  });
+  await saveFantasyDb({ ...db, fantasyPlayers });
+  FANTASY_PLAYERS.forEach((player) => {
+    if (fantasyPlayers[player.id]) Object.assign(player, fantasyPlayers[player.id]);
+  });
+  renderPlayersTable();
+  alert('Player stats saved.');
+}
+
+function initAdminPage() {
+  const guard = document.getElementById('admin-access-denied');
+  const panel = document.getElementById('admin-panel');
+  if (!isFantasyAdmin()) {
+    if (guard) guard.hidden = false;
+    if (panel) panel.hidden = true;
+    return;
+  }
+  if (guard) guard.hidden = true;
+  if (panel) panel.hidden = false;
+  renderAdminState();
+  renderAdminPlayers();
+  document.getElementById('admin-create-matchday')?.addEventListener('click', () => createFantasyMatchday().catch((error) => alert(error.message)));
+  document.getElementById('admin-start-matchday')?.addEventListener('click', () => startFantasyMatchday().catch((error) => alert(error.message)));
+  document.getElementById('admin-end-matchday')?.addEventListener('click', () => endFantasyMatchday().catch((error) => alert(error.message)));
+  document.getElementById('admin-save-stats')?.addEventListener('click', () => saveFantasyPlayerStats().catch((error) => alert(error.message)));
 }

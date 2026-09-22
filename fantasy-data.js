@@ -51,21 +51,15 @@ const FANTASY_SUB_COUNT = 1;
 const FANTASY_STORAGE_KEY = 'pitchballFantasyTeam';
 const FANTASY_SESSION_KEY = 'psl_session';
 
-const SAMPLE_LEADERBOARD = [
-  { username: 'Mitsos', total: 118, matchday: 36 },
-  { username: 'Kasidis', total: 110, matchday: 32 },
-  { username: 'Panos', total: 102, matchday: 28 },
-  { username: 'Asteras FC', total: 96, matchday: 25 },
-  { username: 'Nikos', total: 89, matchday: 24 }
-];
-
 function getPlayerById(playerId) {
   return FANTASY_PLAYERS.find((player) => player.id === playerId) || null;
 }
 
 function getStoredFantasyTeam() {
   try {
-    const raw = localStorage.getItem(FANTASY_STORAGE_KEY);
+    const user = getCurrentFantasyUser();
+    if (!user) return [];
+    const raw = localStorage.getItem(`${FANTASY_STORAGE_KEY}:${user.username.toLowerCase()}`);
     return raw ? JSON.parse(raw) : [];
   } catch (error) {
     return [];
@@ -73,7 +67,10 @@ function getStoredFantasyTeam() {
 }
 
 function saveFantasyTeam(team) {
-  localStorage.setItem(FANTASY_STORAGE_KEY, JSON.stringify(team));
+  const user = getCurrentFantasyUser();
+  if (user) {
+    localStorage.setItem(`${FANTASY_STORAGE_KEY}:${user.username.toLowerCase()}`, JSON.stringify(team));
+  }
 }
 
 function getCurrentFantasyUser() {

@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pitchball Fantasy | Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="fantasy-style.css" />
+</head>
+<body data-page="admin">
+  <div class="fantasy-shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">P</div>
+        <span>Pitchball Fantasy</span>
+      </div>
+      <nav class="topnav" aria-label="Fantasy pages">
+        <a href="index.html" class="nav-link">Index</a>
+        <a href="fantasy-build.html" class="nav-link">Build Your Team</a>
+        <a href="fantasy-leaderboard.html" class="nav-link">Leaderboard</a>
+        <a href="fantasy-players.html" class="nav-link">Player Stats</a>
+        <a href="fantasy-admin.html" class="nav-link active">Admin</a>
+      </nav>
+      <button id="sign-in-button" class="auth-button" type="button">Sign in</button>
+    </header>
+
+    <div class="page-header">
+      <div>
+        <p class="section-title">League control</p>
+        <h1>Admin</h1>
+      </div>
+      <div class="status-pill"><span class="status-dot"></span>Restricted access</div>
+    </div>
+
+    <div id="admin-access-denied" class="panel admin-message" hidden>
+      Admin access is required to manage fantasy matchdays.
+    </div>
+
+    <main id="admin-panel" hidden>
+      <section class="panel admin-section">
+        <div class="section-header">
+          <div>
+            <p class="section-title">Matchday control</p>
+            <h2 id="admin-matchday-status">No matchday created</h2>
+          </div>
+        </div>
+        <div class="admin-controls">
+          <label>Matchday name
+            <input id="admin-matchday-name" type="text" placeholder="e.g. Matchday 1" />
+          </label>
+          <button id="admin-create-matchday" class="primary-btn" type="button">Create matchday</button>
+          <button id="admin-start-matchday" class="secondary-btn" type="button">Start matchday</button>
+          <button id="admin-end-matchday" class="secondary-btn" type="button">End matchday</button>
+        </div>
+        <p class="admin-help">Starting a matchday locks team transfers. Ending it applies each submitted player's matchday points to manager totals.</p>
+      </section>
+
+      <section class="panel admin-section">
+        <div class="section-header">
+          <div>
+            <p class="section-title">Player stats</p>
+            <h2>Edit matchday results</h2>
+          </div>
+          <button id="admin-save-stats" class="primary-btn" type="button">Save stats</button>
+        </div>
+        <div id="admin-player-list" class="admin-player-list"></div>
+      </section>
+    </main>
+  </div>
+  <script src="fantasy-data.js"></script>
+  <script src="fantasy-app.js"></script>
+</body>
+</html>
