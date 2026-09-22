@@ -17,7 +17,7 @@
         <span>Pitchball Fantasy</span>
       </div>
       <nav class="topnav">
-        <a href="fantasy-index.html" class="nav-link">Index</a>
+        <a href="index.html" class="nav-link">Index</a>
         <a href="fantasy-build.html" class="nav-link">Build Your Team</a>
         <a href="fantasy-leaderboard.html" class="nav-link active">Leaderboard</a>
         <a href="fantasy-players.html" class="nav-link">Player Stats</a>
@@ -43,13 +43,24 @@
   <div id="fantasy-auth-overlay" class="auth-overlay">
     <div class="auth-modal">
       <div class="auth-modal-header">
-        <h3>Sign in to continue</h3>
+        <h3 id="fantasy-auth-title">Sign in to continue</h3>
         <button id="close-auth" type="button" class="small-btn">Close</button>
       </div>
-      <form id="fantasy-auth-form" class="auth-form">
+      <div class="auth-tabs">
+        <button id="fantasy-sign-in-tab" class="auth-tab active" type="button">Sign in</button>
+        <button id="fantasy-register-tab" class="auth-tab" type="button">Register</button>
+      </div>
+      <form id="fantasy-auth-form" class="auth-form" data-mode="login">
         <label for="fantasy-username">Username</label>
-        <input id="fantasy-username" type="text" placeholder="Enter your Pitchball username" />
-        <button class="primary-btn" type="submit">Continue</button>
+        <input id="fantasy-username" type="text" placeholder="Username or email" autocomplete="username" required />
+        <div>
+          <label for="fantasy-email">Email</label>
+          <input id="fantasy-email" type="email" placeholder="your@email.com" autocomplete="email" />
+        </div>
+        <label for="fantasy-password">Password</label>
+        <input id="fantasy-password" type="password" placeholder="Enter your password" autocomplete="current-password" required />
+        <div id="fantasy-auth-error" class="auth-error" role="alert" hidden></div>
+        <button id="fantasy-auth-submit" class="primary-btn" type="submit">Sign in</button>
       </form>
     </div>
   </div>

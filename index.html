@@ -89,6 +89,29 @@
   }
   .back-link:hover { color: var(--neon-cyan); }
 
+  .topnav {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 2.5rem;
+  }
+  .nav-link {
+    padding: 8px 12px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 0.85rem;
+    transition: 0.2s ease;
+  }
+  .nav-link:hover,
+  .nav-link.active {
+    border-color: var(--border-color-2);
+    background: rgba(255,255,255,0.03);
+    color: var(--text-main);
+  }
+
   header { text-align: center; margin-bottom: 3rem; }
   .eyebrow {
     font-size: 0.78rem;
@@ -224,6 +247,13 @@
 <div class="container">
   <a href="https://pitchball.gr" class="back-link">&larr; pitchball.gr</a>
 
+  <nav class="topnav" aria-label="Fantasy pages">
+    <a href="index.html" class="nav-link active" aria-current="page">Index</a>
+    <a href="fantasy-build.html" class="nav-link">Build Your Team</a>
+    <a href="fantasy-leaderboard.html" class="nav-link">Leaderboard</a>
+    <a href="fantasy-players.html" class="nav-link">Player Stats</a>
+  </nav>
+
   <header>
     <div class="eyebrow">Pitchball Super League</div>
     <h1 class="title">Fan<span>tasy</span></h1>
@@ -281,20 +311,20 @@
   <div class="section">
     <div class="section-title">Coming Up</div>
     <div class="nav-grid">
-      <a href="#" class="nav-card disabled">
-        <span class="nav-card-tag">Soon</span>
+      <a href="fantasy-build.html" class="nav-card">
+        <span class="nav-card-tag">Open</span>
         <div class="nav-card-icon">&#128101;</div>
         <div class="nav-card-title">Squad Builder</div>
         <div class="nav-card-desc">Draft your team once PSL6 player data is live.</div>
       </a>
-      <a href="#" class="nav-card disabled">
-        <span class="nav-card-tag">Soon</span>
+      <a href="fantasy-leaderboard.html" class="nav-card">
+        <span class="nav-card-tag">Open</span>
         <div class="nav-card-icon">&#127942;</div>
         <div class="nav-card-title">Leaderboard</div>
         <div class="nav-card-desc">See where you rank against every manager.</div>
       </a>
-      <a href="#" class="nav-card disabled">
-        <span class="nav-card-tag">Soon</span>
+      <a href="fantasy-players.html" class="nav-card">
+        <span class="nav-card-tag">Open</span>
         <div class="nav-card-icon">&#128202;</div>
         <div class="nav-card-title">Player Stats</div>
         <div class="nav-card-desc">Per-player rally, error and win breakdowns.</div>

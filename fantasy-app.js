@@ -20,6 +20,126 @@ function formatPlayerForm(player) {
   return form === null ? '\u2014' : form.toFixed(1);
 }
 
+const FANTASY_DB_URL = 'https://ptchbl4-default-rtdb.europe-west1.firebasedatabase.app/.json';
+let fantasyDbCache = null;
+
+async function getFantasyDb() {
+  if (fantasyDbCache) return fantasyDbCache;
+  const response = await fetch(FANTASY_DB_URL);
+  if (!response.ok) throw new Error('Unable to connect to the account service.');
+  fantasyDbCache = await response.json();
+  return fantasyDbCache;
+}
+
+async function hashFantasyPassword(password) {
+  const data = new TextEncoder().encode(`${password}psl5salt`);
+  const buffer = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(buffer))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+function setFantasyAuthError(message) {
+  const error = document.getElementById('fantasy-auth-error');
+  if (error) {
+    error.textContent = message;
+    error.hidden = !message;
+  }
+}
+
+function setFantasyAuthMode(mode) {
+  const isRegistering = mode === 'register';
+  const form = document.getElementById('fantasy-auth-form');
+  const title = document.getElementById('fantasy-auth-title');
+  const submit = document.getElementById('fantasy-auth-submit');
+  const username = document.getElementById('fantasy-username');
+  const email = document.getElementById('fantasy-email');
+  const registerTab = document.getElementById('fantasy-register-tab');
+  const signInTab = document.getElementById('fantasy-sign-in-tab');
+
+  if (!form || !title || !submit || !username || !email || !registerTab || !signInTab) return;
+  form.dataset.mode = mode;
+  title.textContent = isRegistering ? 'Create your account' : 'Sign in to continue';
+  submit.textContent = isRegistering ? 'Create account' : 'Sign in';
+  email.required = isRegistering;
+  email.closest('div').hidden = !isRegistering;
+  username.placeholder = isRegistering ? 'Choose a username' : 'Username or email';
+  registerTab.classList.toggle('active', isRegistering);
+  signInTab.classList.toggle('active', !isRegistering);
+  setFantasyAuthError('');
+}
+
+async function submitFantasyAuth(form) {
+  const mode = form.dataset.mode || 'login';
+  const usernameOrEmail = document.getElementById('fantasy-username').value.trim();
+  const email = document.getElementById('fantasy-email').value.trim().toLowerCase();
+  const password = document.getElementById('fantasy-password').value;
+  const submit = document.getElementById('fantasy-auth-submit');
+
+  setFantasyAuthError('');
+  if (!usernameOrEmail || !password || (mode === 'register' && !email)) {
+    setFantasyAuthError('Please fill in all required fields.');
+    return;
+  }
+  if (mode === 'register' && password.length < 6) {
+    setFantasyAuthError('Password must be at least 6 characters.');
+    return;
+  }
+
+  submit.disabled = true;
+  submit.textContent = mode === 'register' ? 'Creating account...' : 'Signing in...';
+  try {
+    const db = await getFantasyDb();
+    const users = db.users || {};
+    const passwordHash = await hashFantasyPassword(password);
+
+    if (mode === 'register') {
+      const username = usernameOrEmail;
+      const usernameKey = username.toLowerCase();
+      const usernameTaken = Boolean(users[usernameKey]);
+      const emailTaken = Object.values(users).some((user) => String(user.email || '').toLowerCase() === email);
+      if (username.length < 2) {
+        setFantasyAuthError('Username must be at least 2 characters.');
+        return;
+      }
+      if (usernameTaken) {
+        setFantasyAuthError('That username is already registered.');
+        return;
+      }
+      if (emailTaken) {
+        setFantasyAuthError('That email is already registered.');
+        return;
+      }
+      users[usernameKey] = { username, email, passHash: passwordHash, avatar: null, joined: new Date().toISOString() };
+      const response = await fetch(FANTASY_DB_URL, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...db, users })
+      });
+      if (!response.ok) throw new Error('Unable to create the account.');
+      fantasyDbCache = { ...db, users };
+      localStorage.setItem(FANTASY_SESSION_KEY, JSON.stringify({ username, email, avatar: null }));
+    } else {
+      const user = Object.values(users).find((entry) =>
+        entry.username.toLowerCase() === usernameOrEmail.toLowerCase() || entry.email.toLowerCase() === usernameOrEmail.toLowerCase()
+      );
+      if (!user || user.passHash !== passwordHash) {
+        setFantasyAuthError('Incorrect username/email or password.');
+        return;
+      }
+      localStorage.setItem(FANTASY_SESSION_KEY, JSON.stringify({ username: user.username, email: user.email, avatar: user.avatar || null }));
+    }
+
+    document.getElementById('fantasy-auth-overlay').classList.remove('visible');
+    window.location.reload();
+  } catch (error) {
+    setFantasyAuthError(error.message || 'Connection error. Please try again.');
+  } finally {
+    submit.disabled = false;
+    submit.textContent = mode === 'register' ? 'Create account' : 'Sign in';
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   const navLinks = document.querySelectorAll('.nav-link');
   navLinks.forEach((link) => {
@@ -47,24 +167,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const authForm = document.getElementById('fantasy-auth-form');
   if (authForm) {
-    authForm.addEventListener('submit', (event) => {
+    setFantasyAuthMode('login');
+    authForm.addEventListener('submit', async (event) => {
       event.preventDefault();
-      const username = document.getElementById('fantasy-username').value.trim();
-      if (!username) {
-        alert('Please enter a username to continue.');
-        return;
-      }
-      localStorage.setItem(FANTASY_SESSION_KEY, JSON.stringify({ username }));
-      const overlay = document.getElementById('fantasy-auth-overlay');
-      if (overlay) {
-        overlay.classList.remove('visible');
-      }
-      if (signInButton) {
-        signInButton.textContent = `Signed in: ${username}`;
-      }
-      window.location.reload();
+      await submitFantasyAuth(authForm);
     });
   }
+
+  document.getElementById('fantasy-sign-in-tab')?.addEventListener('click', () => setFantasyAuthMode('login'));
+  document.getElementById('fantasy-register-tab')?.addEventListener('click', () => setFantasyAuthMode('register'));
 
   const authClose = document.getElementById('close-auth');
   if (authClose) {
