@@ -51,7 +51,6 @@ async function loadFantasyState() {
     const currentUser = getCurrentFantasyUser();
     const account = currentUser ? db.users?.[currentUser.username.toLowerCase()] : null;
     if (account?.fantasyCaptain && !getStoredFantasyCaptain()) saveFantasyCaptain(account.fantasyCaptain);
-    if (account?.fantasyViceCaptain && !getStoredFantasyViceCaptain()) saveFantasyViceCaptain(account.fantasyViceCaptain);
     if (account?.fantasySubmittedMatchdayId && !getFantasySubmissionState()) {
       saveFantasySubmissionState({ matchdayId: account.fantasySubmittedMatchdayId, transfersUsed: Number(account.fantasyTransfersUsed) || 0 });
     }
@@ -490,7 +489,6 @@ function renderBuildBoard() {
 
   const selectedPlayers = occupiedTeam.map((playerId) => getPlayerById(playerId)).filter(Boolean);
   const captain = getStoredFantasyCaptain();
-  const viceCaptain = getStoredFantasyViceCaptain();
   if (selectedPlayers.length === 0) {
     teamSummary.innerHTML = '<p class="empty-state">Your squad is empty. Pick your five-man team from the list below.</p>';
   } else {
@@ -498,13 +496,10 @@ function renderBuildBoard() {
       <div class="selected-player">
         <div>
           <strong>${player.name}</strong>
-          <span class="player-role">${team.indexOf(player.id) < 4 ? 'Starter' : 'Sub'}</span>
-          ${captain === player.id ? '<span class="captain-badge">C</span>' : ''}
-          ${viceCaptain === player.id ? '<span class="vice-captain-badge">VC</span>' : ''}
+          <span class="player-role">${team.indexOf(player.id) < 4 ? 'Starter' : 'Substitute'} · ${player.team || 'Team unknown'} · ${getPlayerFantasyPoints(player)} pts</span>
         </div>
         <div class="selected-player-actions">
           ${team.indexOf(player.id) < 4 ? `<button class="small-btn captain-btn ${captain === player.id ? 'selected' : ''}" type="button" onclick="setFantasyCaptain('${player.id}')">${captain === player.id ? 'Captain' : 'Make captain'}</button>` : ''}
-          ${team.indexOf(player.id) < 4 ? `<button class="small-btn captain-btn ${viceCaptain === player.id ? 'selected' : ''}" type="button" onclick="setFantasyViceCaptain('${player.id}')">${viceCaptain === player.id ? 'Vice' : 'Make vice'}</button>` : ''}
           <button class="small-btn" type="button" onclick="removePlayerFromTeam('${player.id}')">Remove</button>
         </div>
       </div>
@@ -516,9 +511,12 @@ function renderBuildBoard() {
     const player = getPlayerById(team[slotIndex]);
     slot.innerHTML = player ? `
       <button class="shirt-player" type="button" onclick="removePlayerFromSlot(${slotIndex})" aria-label="Remove ${player.name}">
-        <span class="team-shirt" style="--shirt-color: ${player.teamColor || '#00f0ff'}"></span>
+        <span class="shirt-wrap">
+          <span class="team-shirt" style="--shirt-color: ${player.teamColor || '#00f0ff'}"></span>
+          ${captain === player.id ? '<span class="court-captain-badge">C</span>' : ''}
+        </span>
         <strong>${player.name}</strong>
-        <small>${slotIndex === 4 ? 'Substitute' : 'Starter'}</small>
+        <small>${slotIndex === 4 ? 'Substitute' : 'Starter'} · ${player.team || 'Team unknown'} · ${getPlayerFantasyPoints(player)} pts</small>
       </button>
     ` : `<button class="add-slot" type="button" onclick="openPlayerPicker(${slotIndex})" aria-label="Add ${slotIndex === 4 ? 'substitute' : 'starter'}"><span>+</span><small>${slotIndex === 4 ? 'Add substitute' : 'Add player'}</small></button>`;
   });
@@ -538,7 +536,7 @@ function openPlayerPicker(slotIndex) {
   list.innerHTML = FANTASY_PLAYERS.filter((player) => !team.includes(player.id) || player.id === selected).map((player) => `
     <button class="picker-player" type="button" onclick="selectPlayerForSlot('${player.id}', ${slotIndex})">
       <span class="team-shirt mini-shirt" style="--shirt-color: ${player.teamColor || '#00f0ff'}"></span>
-      <span><strong>${player.name}</strong><small>${formatMoney(player.value)} · ${getPlayerFantasyPoints(player)} pts</small></span>
+      <span><strong>${player.name}</strong><small>${player.team || 'Team unknown'} · ${formatMoney(player.value)} · ${getPlayerFantasyPoints(player)} pts</small></span>
     </button>
   `).join('') || '<p class="empty-state">All players are already in your squad.</p>';
   picker.hidden = false;
@@ -572,7 +570,6 @@ window.removePlayerFromSlot = function (slotIndex) {
   const playerId = team[slotIndex];
   team[slotIndex] = null;
   if (playerId === getStoredFantasyCaptain()) saveFantasyCaptain(null);
-  if (playerId === getStoredFantasyViceCaptain()) saveFantasyViceCaptain(null);
   saveFantasyTeam(team);
   renderBuildBoard();
 };
@@ -586,20 +583,6 @@ window.setFantasyCaptain = function (playerId) {
   const team = getStoredFantasyTeam();
   if (team.indexOf(playerId) > FANTASY_STARTER_COUNT - 1) return;
   saveFantasyCaptain(getStoredFantasyCaptain() === playerId ? null : playerId);
-  if (getStoredFantasyCaptain() === getStoredFantasyViceCaptain()) saveFantasyViceCaptain(null);
-  renderBuildBoard();
-};
-
-window.setFantasyViceCaptain = function (playerId) {
-  if (!ensureFantasyLogin()) return;
-  if (transfersAreLocked()) {
-    showTransferLockMessage();
-    return;
-  }
-  const team = getStoredFantasyTeam();
-  if (team.indexOf(playerId) > FANTASY_STARTER_COUNT - 1) return;
-  saveFantasyViceCaptain(getStoredFantasyViceCaptain() === playerId ? null : playerId);
-  if (getStoredFantasyCaptain() === getStoredFantasyViceCaptain()) saveFantasyCaptain(null);
   renderBuildBoard();
 };
 
@@ -647,7 +630,6 @@ window.removePlayerFromTeam = function (playerId) {
   if (!recordFantasyTransfer()) return;
   const team = getStoredFantasyTeam().filter((id) => id !== playerId);
   if (playerId === getStoredFantasyCaptain()) saveFantasyCaptain(null);
-  if (playerId === getStoredFantasyViceCaptain()) saveFantasyViceCaptain(null);
   saveFantasyTeam(team);
   renderBuildBoard();
 };
@@ -710,13 +692,8 @@ window.saveFantasyTeamToStorage = async function () {
     return;
   }
   const captain = getStoredFantasyCaptain();
-  const viceCaptain = getStoredFantasyViceCaptain();
   if (!captain || team.slice(0, FANTASY_STARTER_COUNT).indexOf(captain) < 0) {
     alert('Choose a captain from your four starters.');
-    return;
-  }
-  if (!viceCaptain || team.slice(0, FANTASY_STARTER_COUNT).indexOf(viceCaptain) < 0) {
-    alert('Choose a vice captain from your four starters.');
     return;
   }
   try {
@@ -736,7 +713,6 @@ window.saveFantasyTeamToStorage = async function () {
       ...users[accountKey],
       fantasyTeam: team,
       fantasyCaptain: captain,
-      fantasyViceCaptain: viceCaptain,
       fantasySubmittedMatchdayId: targetMatchday.id,
       fantasyTransfersUsed: transfersUsed
     };
@@ -923,7 +899,7 @@ function renderAdminPlayers() {
       <label>Goals <input type="number" min="0" value="${Number(selectedStats[player.id]?.goals) || 0}" data-stat="goals"></label>
       <label>Own goals <input type="number" min="0" value="${Number(selectedStats[player.id]?.ownGoals) || 0}" data-stat="ownGoals"></label>
       <label>MVPs <input type="number" min="0" value="${Number(selectedStats[player.id]?.mvps) || 0}" data-stat="mvps"></label>
-      <label>Matchday points <input type="number" value="${Number(selectedStats[player.id]?.matchdayPoints) || 0}" data-stat="matchdayPoints"></label>
+      <label>Matchday points <input class="point-input ${Object.prototype.hasOwnProperty.call(selectedStats[player.id] || {}, 'matchdayPoints') ? 'edited' : 'untouched'}" type="number" value="${Number(selectedStats[player.id]?.matchdayPoints) || 0}" data-stat="matchdayPoints"></label>
     </div>
   `).join('');
 }

@@ -242,6 +242,18 @@ button, input, select { font: inherit; }
   color: var(--text);
 }
 
+.admin-player-row .point-input.untouched {
+  background: #170b1b;
+  color: #fff;
+  border-color: rgba(255,255,255,0.2);
+}
+
+.admin-player-row .point-input.edited {
+  background: #fff;
+  color: #170b1b;
+  border-color: #fff;
+}
+
 .danger-btn {
   color: var(--red);
 }
@@ -842,27 +854,26 @@ h1 span {
   color: var(--gold);
 }
 
-.captain-badge,
-.vice-captain-badge {
+.shirt-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.court-captain-badge {
+  position: absolute;
+  top: -5px;
+  right: -9px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 22px;
+  width: 20px;
   height: 20px;
-  margin-left: 5px;
+  border: 2px solid #241500;
   border-radius: 5px;
-  font-size: 0.68rem;
-  font-weight: 800;
-}
-
-.captain-badge {
   background: var(--gold);
   color: #241500;
-}
-
-.vice-captain-badge {
-  background: rgba(255,255,255,0.18);
-  color: var(--text);
+  font-size: 0.72rem;
+  font-weight: 800;
 }
 
 .player-role {

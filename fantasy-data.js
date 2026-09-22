@@ -82,18 +82,8 @@ function getStoredFantasyCaptain() {
   return localStorage.getItem(getFantasyUserStorageKey('pitchballFantasyCaptain')) || null;
 }
 
-function getStoredFantasyViceCaptain() {
-  return localStorage.getItem(getFantasyUserStorageKey('pitchballFantasyViceCaptain')) || null;
-}
-
 function saveFantasyCaptain(playerId) {
   const key = getFantasyUserStorageKey('pitchballFantasyCaptain');
-  if (playerId) localStorage.setItem(key, playerId);
-  else localStorage.removeItem(key);
-}
-
-function saveFantasyViceCaptain(playerId) {
-  const key = getFantasyUserStorageKey('pitchballFantasyViceCaptain');
   if (playerId) localStorage.setItem(key, playerId);
   else localStorage.removeItem(key);
 }
