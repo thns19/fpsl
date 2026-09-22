@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pitchball Fantasy</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --space-dark: #05010f;
+    --panel: rgba(255, 255, 255, 0.03);
+    --neon-purple: #b366ff;
+    --neon-cyan: #00f0ff;
+    --accent-gold: #ffd166;
+    --accent-green: #39ff88;
+    --accent-pink: #ff5fa2;
+    --text-main: #ffffff;
+    --text-muted: rgba(255, 255, 255, 0.5);
+    --text-dim: rgba(255, 255, 255, 0.3);
+    --border-color: rgba(255, 255, 255, 0.08);
+    --border-color-2: rgba(255, 255, 255, 0.15);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Space Grotesk', sans-serif;
+    background-color: var(--space-dark);
+    background-image: url('bg.png');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    color: var(--text-main);
+    min-height: 100vh;
+    position: relative;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(5, 1, 15, 0.87);
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  .stars {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    z-index: 1;
+    pointer-events: none;
+  }
+  .stars::before, .stars::after {
+    content: ''; position: absolute; width: 2px; height: 2px;
+    background: transparent;
+    box-shadow:
+      10vw 20vh #fff, 40vw 80vh #fff, 80vw 10vh #fff, 20vw 90vh #fff,
+      60vw 50vh #fff, 90vw 70vh #fff, 30vw 40vh #fff, 70vw 20vh #fff,
+      50vw 10vh #fff, 15vw 60vh #fff, 85vw 90vh #fff, 95vw 30vh #fff;
+    animation: twinkle 4s infinite alternate;
+  }
+  .stars::after {
+    width: 3px; height: 3px;
+    box-shadow:
+      25vw 15vh var(--neon-cyan), 75vw 85vh var(--neon-purple), 5vw 50vh var(--neon-cyan),
+      55vw 95vh var(--neon-purple), 45vw 35vh var(--neon-cyan), 85vw 55vh var(--neon-purple);
+    animation: twinkle 3s infinite alternate-reverse;
+  }
+  @keyframes twinkle {
+    0% { opacity: 0.2; transform: scale(0.8); }
+    100% { opacity: 1; transform: scale(1.2); }
+  }
+
+  .container {
+    position: relative;
+    z-index: 2;
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 5rem 1.5rem 5rem;
+  }
+
+  .back-link {
+    display: inline-block;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 0.85rem;
+    margin-bottom: 1.5rem;
+    transition: color 0.25s;
+  }
+  .back-link:hover { color: var(--neon-cyan); }
+
+  header { text-align: center; margin-bottom: 3rem; }
+  .eyebrow {
+    font-size: 0.78rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    font-weight: 600;
+    margin-bottom: 0.6rem;
+  }
+  .title {
+    font-size: clamp(2.6rem, 7vh, 4rem);
+    font-weight: 300;
+    letter-spacing: -1px;
+    margin-bottom: 0.6rem;
+    line-height: 1.05;
+  }
+  .title span { color: var(--neon-cyan); font-weight: 700; text-shadow: 0 0 24px rgba(0,240,255,0.4); }
+  .subtitle {
+    font-size: 1rem;
+    color: var(--text-muted);
+    font-weight: 300;
+    font-style: italic;
+    max-width: 560px;
+    margin: 0 auto;
+    line-height: 1.6;
+  }
+
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 16px;
+    border-radius: 999px;
+    border: 1px solid var(--border-color);
+    background: rgba(255, 255, 255, 0.03);
+    font-size: 0.72rem;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--neon-cyan);
+    font-weight: 600;
+    margin-top: 1.4rem;
+  }
+  .status-pill .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--neon-cyan);
+    box-shadow: 0 0 8px var(--neon-cyan);
+    animation: pulse 1.6s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+
+  .section { margin-bottom: 2.5rem; }
+  .section-title {
+    font-size: 0.78rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    font-weight: 600;
+    margin-bottom: 1rem;
+  }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    padding: 1.5rem;
+  }
+
+  .steps-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; }
+  .step-card {
+    background: var(--panel);
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    padding: 1.25rem;
+  }
+  .step-num {
+    font-size: 0.75rem;
+    color: var(--neon-cyan);
+    font-weight: 700;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+  }
+  .step-title { font-size: 1rem; font-weight: 500; margin-bottom: 6px; }
+  .step-desc { font-size: 0.85rem; color: var(--text-muted); line-height: 1.55; }
+
+  table.scoring { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+  table.scoring th, table.scoring td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--border-color); }
+  table.scoring th { color: var(--text-muted); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; }
+  table.scoring tr:last-child td { border-bottom: none; }
+  .pts { font-weight: 700; }
+  .pts.pos { color: var(--accent-green); }
+  .pts.neg { color: var(--accent-pink); }
+  .pts.bonus { color: var(--accent-gold); }
+
+  .draft-note {
+    margin-top: 1rem;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    font-style: italic;
+  }
+
+  .nav-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+  .nav-card {
+    background: var(--panel);
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    padding: 1.25rem;
+    text-decoration: none;
+    color: var(--text-main);
+    transition: border-color 0.2s, transform 0.2s;
+    display: block;
+    position: relative;
+  }
+  .nav-card.disabled { opacity: 0.5; cursor: default; pointer-events: none; }
+  .nav-card:not(.disabled):hover { border-color: var(--border-color-2); transform: translateY(-2px); }
+  .nav-card-icon { font-size: 1.6rem; margin-bottom: 10px; }
+  .nav-card-title { font-size: 1rem; font-weight: 500; margin-bottom: 4px; }
+  .nav-card-desc { font-size: 0.82rem; color: var(--text-muted); }
+  .nav-card-tag {
+    position: absolute; top: 14px; right: 14px;
+    font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.5px;
+    padding: 3px 8px; border-radius: 999px;
+    background: rgba(255,255,255,0.06); color: var(--text-muted);
+  }
+
+  .auth-note { font-size: 0.78rem; color: var(--text-dim); text-align: center; margin-top: 3rem; line-height: 1.6; }
+</style>
+</head>
+<body>
+
+<div class="stars"></div>
+
+<div class="container">
+  <a href="https://pitchball.gr" class="back-link">&larr; pitchball.gr</a>
+
+  <header>
+    <div class="eyebrow">Pitchball Super League</div>
+    <h1 class="title">Fan<span>tasy</span></h1>
+    <p class="subtitle">Draft real PSL6 players onto your squad, score points off their real match performances, and compete for the top of the Fantasy leaderboard.</p>
+    <div class="status-pill"><span class="dot"></span>Structure Draft &middot; Player Data Coming Soon</div>
+  </header>
+
+  <div class="section">
+    <div class="section-title">How It Works</div>
+    <div class="steps-grid">
+      <div class="step-card">
+        <div class="step-num">01</div>
+        <div class="step-title">Build a squad</div>
+        <div class="step-desc">Pick 5&ndash;7 real PSL6 players across different teams within a fixed budget, drawn from their live ratings.</div>
+      </div>
+      <div class="step-card">
+        <div class="step-num">02</div>
+        <div class="step-title">Set your lineup</div>
+        <div class="step-desc">Before each gameweek, choose your starters and bench &mdash; and pick one Captain, who scores double.</div>
+      </div>
+      <div class="step-card">
+        <div class="step-num">03</div>
+        <div class="step-title">Score off real matches</div>
+        <div class="step-desc">Every PSL6 fixture that gameweek feeds your players' points based on how they actually performed.</div>
+      </div>
+      <div class="step-card">
+        <div class="step-num">04</div>
+        <div class="step-title">Climb the table</div>
+        <div class="step-desc">Points accumulate across the season on the Fantasy leaderboard, alongside head-to-head mini-leagues.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Draft Scoring System</div>
+    <div class="card">
+      <table class="scoring">
+        <thead>
+          <tr><th>Action</th><th>Points</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Point scored (clean)</td><td class="pts pos">+2</td></tr>
+          <tr><td>Point scored (opponent forced into error)</td><td class="pts pos">+1</td></tr>
+          <tr><td>Own goal</td><td class="pts neg">&minus;1</td></tr>
+          <tr><td>Match win (starter/sub)</td><td class="pts pos">+4/+2</td></tr>
+          <tr><td>Clean sheet</td><td class="pts bonus">+3</td></tr>
+          <tr><td>Man of the Match</td><td class="pts bonus">+2</td></tr>
+          <tr><td>Captain</td><td class="pts bonus">&times;2 all points</td></tr>
+        </tbody>
+      </table>
+      <p class="draft-note">This is a first draft of the scoring rules &mdash; point values are easy to tune once we see how real match stats look. Nothing here is final.</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Coming Up</div>
+    <div class="nav-grid">
+      <a href="#" class="nav-card disabled">
+        <span class="nav-card-tag">Soon</span>
+        <div class="nav-card-icon">&#128101;</div>
+        <div class="nav-card-title">Squad Builder</div>
+        <div class="nav-card-desc">Draft your team once PSL6 player data is live.</div>
+      </a>
+      <a href="#" class="nav-card disabled">
+        <span class="nav-card-tag">Soon</span>
+        <div class="nav-card-icon">&#127942;</div>
+        <div class="nav-card-title">Leaderboard</div>
+        <div class="nav-card-desc">See where you rank against every manager.</div>
+      </a>
+      <a href="#" class="nav-card disabled">
+        <span class="nav-card-tag">Soon</span>
+        <div class="nav-card-icon">&#128202;</div>
+        <div class="nav-card-title">Player Stats</div>
+        <div class="nav-card-desc">Per-player rally, error and win breakdowns.</div>
+      </a>
+    </div>
+  </div>
+
+  <p class="auth-note">Fantasy uses the same PSL account system as the main site &mdash; sign in with your existing username and password.</p>
+</div>
+
+<script>
+// ── SHARED PSL AUTH WIDGET (identical to psl5/league.html) ─────────
+// Same Firebase Realtime Database, so existing PSL accounts work here too.
+// Note: localStorage sessions are per-subdomain, so signing in on pitchball.gr
+// does not automatically carry over here — same credentials, separate sign-in.
+const PSL_DB_URL = 'https://ptchbl4-default-rtdb.europe-west1.firebasedatabase.app/.json';
+const PSL_ADMIN = 'pitchball';
+let _pslDbCache = null, _pslDbFetching = null;
+async function pslDbGet(){if(_pslDbCache)return _pslDbCache;if(_pslDbFetching)return _pslDbFetching;_pslDbFetching=fetch(PSL_DB_URL).then(r=>r.json()).then(data=>{_pslDbCache=data;_pslDbFetching=null;return _pslDbCache;});return _pslDbFetching;}
+async function pslDbSet(data){_pslDbCache=data;await fetch(PSL_DB_URL,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});}
+function pslDbInvalidate(){_pslDbCache=null;}
+let pslCurrentUser=null;
+function pslLoadSession(){const s=localStorage.getItem('psl_session');return s?JSON.parse(s):null;}
+function pslSaveSession(u){localStorage.setItem('psl_session',JSON.stringify(u));}
+function pslClearSession(){localStorage.removeItem('psl_session');}
+async function pslHashPass(pass){const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(pass+'psl5salt'));return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');}
+
+function injectAuthStyles(){if(document.getElementById('psl-auth-styles'))return;const s=document.createElement('style');s.id='psl-auth-styles';s.textContent=`#psl-auth-widget{position:fixed;top:12px;right:14px;z-index:99999;font-family:'Space Grotesk',sans-serif;}.psl-aw-btn{display:flex;align-items:center;gap:7px;background:rgba(10,5,20,0.85);border:1px solid rgba(255,255,255,0.15);border-radius:20px;padding:6px 12px 6px 8px;cursor:pointer;backdrop-filter:blur(8px);font-size:12px;color:#fff;font-weight:500;}.psl-aw-btn:hover{border-color:rgba(0,240,255,0.5);}.psl-aw-avatar{width:22px;height:22px;border-radius:50%;background:#00f0ff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#000;flex-shrink:0;}.psl-aw-avatar.guest{background:rgba(255,255,255,0.15);color:#fff;font-size:13px;}.psl-aw-drop{position:absolute;top:calc(100% + 8px);right:0;background:#0a0518;border:1px solid rgba(255,255,255,0.12);border-radius:12px;overflow:hidden;min-width:220px;box-shadow:0 8px 32px rgba(0,0,0,0.5);display:none;}.psl-aw-drop.open{display:block;}.psl-aw-drop-header{padding:12px 14px;border-bottom:1px solid rgba(255,255,255,0.08);font-size:12px;color:rgba(255,255,255,0.4);display:flex;align-items:center;gap:10px;}.psl-aw-drop-header strong{display:block;font-size:14px;color:#fff;margin-bottom:1px;}.psl-aw-drop-item{display:block;width:100%;padding:11px 14px;font-size:13px;font-weight:500;color:#fff;background:none;border:none;cursor:pointer;text-align:left;transition:background 0.1s;font-family:inherit;text-decoration:none;}.psl-aw-drop-item:hover{background:rgba(255,255,255,0.06);}.psl-aw-drop-item.danger{color:#ff5fa2;}.psl-aw-divider{border:none;border-top:1px solid rgba(255,255,255,0.08);margin:2px 0;}.psl-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:100000;display:flex;align-items:center;justify-content:center;padding:1rem;}.psl-modal{background:#0a0518;border:1px solid rgba(255,255,255,0.12);border-radius:16px;width:100%;max-width:380px;overflow:hidden;}.psl-modal-hd{padding:1.25rem 1.5rem;border-bottom:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:space-between;}.psl-modal-title{font-size:16px;font-weight:600;color:#fff;}.psl-modal-close{background:none;border:none;color:rgba(255,255,255,0.4);cursor:pointer;font-size:20px;line-height:1;padding:2px;font-family:inherit;}.psl-modal-bd{padding:1.5rem;}.psl-form-group{margin-bottom:14px;}.psl-label{font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:5px;display:block;font-weight:500;}.psl-input{width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:#fff;border-radius:8px;padding:9px 12px;font-size:13px;font-family:inherit;box-sizing:border-box;}.psl-input:focus{outline:none;border-color:#00f0ff;}.psl-input::placeholder{color:rgba(255,255,255,0.3);}.psl-btn-primary{width:100%;padding:10px;background:#00f0ff;color:#000;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;}.psl-btn-primary:hover{background:#33f3ff;}.psl-btn-primary:disabled{opacity:0.4;cursor:not-allowed;}.psl-err{font-size:11px;color:#ff5fa2;margin-top:6px;}.psl-ok{font-size:11px;color:#39ff88;margin-top:6px;}.psl-tabs{display:flex;margin-bottom:1.5rem;background:rgba(255,255,255,0.06);border-radius:8px;padding:3px;gap:3px;}.psl-tab{flex:1;padding:7px;border:none;background:none;border-radius:6px;font-size:12px;font-weight:600;color:rgba(255,255,255,0.4);cursor:pointer;font-family:inherit;}.psl-tab.active{background:#00f0ff;color:#000;}.psl-avatar-preview{width:72px;height:72px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,0.15);display:block;margin:0 auto 12px;}`;document.head.appendChild(s);}
+
+function renderWidget(){if(!document.body){setTimeout(renderWidget,50);return;}const ex=document.getElementById('psl-auth-widget');if(ex)ex.remove();const w=document.createElement('div');w.id='psl-auth-widget';if(pslCurrentUser){const avatarBtn=pslCurrentUser.avatar?`<img src="${pslCurrentUser.avatar}" style="width:22px;height:22px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.outerHTML='<div class=psl-aw-avatar>${pslCurrentUser.username[0].toUpperCase()}</div>'">`:`<div class="psl-aw-avatar">${pslCurrentUser.username[0].toUpperCase()}</div>`;const avatarDrop=pslCurrentUser.avatar?`<img src="${pslCurrentUser.avatar}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;">`:`<div class="psl-aw-avatar" style="width:36px;height:36px;font-size:15px;">${pslCurrentUser.username[0].toUpperCase()}</div>`;w.innerHTML=`<div class="psl-aw-btn" onclick="pslToggleDrop()">${avatarBtn}<span>${pslCurrentUser.username}</span><span style="color:rgba(255,255,255,0.3);font-size:10px;">▾</span></div><div class="psl-aw-drop" id="psl-aw-drop"><div class="psl-aw-drop-header">${avatarDrop}<div><strong>${pslCurrentUser.username}</strong>${pslCurrentUser.isAdmin?'<span style="color:#00f0ff;font-size:10px;">⚡ Admin</span>':''}</div></div><hr class="psl-aw-divider"><button class="psl-aw-drop-item danger" onclick="pslLogout()">Sign out</button></div>`;}else{w.innerHTML=`<div class="psl-aw-btn" onclick="pslOpenAuth('login')"><div class="psl-aw-avatar guest">👤</div><span>Sign in</span></div>`;}document.body.appendChild(w);document.addEventListener('click',e=>{if(!w.contains(e.target)){const d=document.getElementById('psl-aw-drop');if(d)d.classList.remove('open');}},{capture:true});}
+function pslToggleDrop(){document.getElementById('psl-aw-drop')?.classList.toggle('open');}
+
+let _authModal=null;
+function pslOpenAuth(tab='login'){if(_authModal)_authModal.remove();const o=document.createElement('div');o.className='psl-modal-overlay';o.id='psl-auth-modal';o.innerHTML=`<div class="psl-modal"><div class="psl-modal-hd"><div class="psl-modal-title">PSL Account</div><button class="psl-modal-close" onclick="pslCloseAuth()">×</button></div><div class="psl-modal-bd"><div class="psl-tabs"><button class="psl-tab ${tab==='login'?'active':''}" onclick="pslSwitchTab('login')">Sign In</button><button class="psl-tab ${tab==='register'?'active':''}" onclick="pslSwitchTab('register')">Register</button></div><div id="psl-tab-login" ${tab!=='login'?'style="display:none"':''}><div class="psl-form-group"><label class="psl-label">Username or Email</label><input class="psl-input" id="psl-li-user" placeholder="Enter username or email"></div><div class="psl-form-group"><label class="psl-label">Password</label><input class="psl-input" id="psl-li-pass" type="password" placeholder="Enter password"></div><div class="psl-err" id="psl-li-err" style="display:none"></div><button class="psl-btn-primary" id="psl-li-btn" onclick="pslDoLogin()">Sign In</button></div><div id="psl-tab-register" ${tab!=='register'?'style="display:none"':''}><div class="psl-form-group"><label class="psl-label">Username</label><input class="psl-input" id="psl-rg-user" placeholder="Choose a username" maxlength="20"></div><div class="psl-form-group"><label class="psl-label">Email</label><input class="psl-input" id="psl-rg-email" type="email" placeholder="your@email.com"></div><div class="psl-form-group"><label class="psl-label">Password</label><input class="psl-input" id="psl-rg-pass" type="password" placeholder="Min. 6 characters"></div><div class="psl-err" id="psl-rg-err" style="display:none"></div><button class="psl-btn-primary" id="psl-rg-btn" onclick="pslDoRegister()">Create Account</button></div></div></div>`;o.addEventListener('click',e=>{if(e.target===o)pslCloseAuth();});document.body.appendChild(o);_authModal=o;}
+function pslCloseAuth(){_authModal?.remove();_authModal=null;}
+function pslSwitchTab(tab){document.getElementById('psl-tab-login').style.display=tab==='login'?'':'none';document.getElementById('psl-tab-register').style.display=tab==='register'?'':'none';document.querySelectorAll('.psl-tab').forEach((b,i)=>b.classList.toggle('active',i===(tab==='login'?0:1)));}
+
+async function pslDoLogin(){const raw=document.getElementById('psl-li-user').value.trim();const pass=document.getElementById('psl-li-pass').value;const e=document.getElementById('psl-li-err');e.style.display='none';if(!raw||!pass){e.textContent='Please fill in all fields.';e.style.display='block';return;}const btn=document.getElementById('psl-li-btn');btn.disabled=true;btn.textContent='Signing in...';try{const db=await pslDbGet();const users=db.users||{};const user=Object.values(users).find(u=>u.username.toLowerCase()===raw.toLowerCase()||u.email.toLowerCase()===raw.toLowerCase());if(!user){e.textContent='Account not found.';e.style.display='block';return;}const hash=await pslHashPass(pass);if(hash!==user.passHash){e.textContent='Incorrect password.';e.style.display='block';return;}pslCurrentUser={username:user.username,email:user.email,avatar:user.avatar||null,isAdmin:user.username.toLowerCase()===PSL_ADMIN};pslSaveSession(pslCurrentUser);pslCloseAuth();renderWidget();}catch(err){e.textContent='Connection error. Try again.';e.style.display='block';}finally{btn.disabled=false;btn.textContent='Sign In';}}
+async function pslDoRegister(){const username=document.getElementById('psl-rg-user').value.trim();const email=document.getElementById('psl-rg-email').value.trim().toLowerCase();const pass=document.getElementById('psl-rg-pass').value;const e=document.getElementById('psl-rg-err');e.style.display='none';if(!username||!email||!pass){e.textContent='Please fill in all fields.';e.style.display='block';return;}if(username.length<2){e.textContent='Username too short.';e.style.display='block';return;}if(pass.length<6){e.textContent='Password must be 6+ characters.';e.style.display='block';return;}const btn=document.getElementById('psl-rg-btn');btn.disabled=true;btn.textContent='Creating...';try{const db=await pslDbGet();const users=db.users||{};if(users[username.toLowerCase()]){e.textContent='Username taken.';e.style.display='block';return;}const passHash=await pslHashPass(pass);users[username.toLowerCase()]={username,email,passHash,avatar:null,joined:new Date().toISOString()};await pslDbSet({...db,users});pslDbInvalidate();pslCurrentUser={username,email,avatar:null,isAdmin:username.toLowerCase()===PSL_ADMIN};pslSaveSession(pslCurrentUser);pslCloseAuth();renderWidget();}catch(err){e.textContent='Connection error. Try again.';e.style.display='block';}finally{btn.disabled=false;btn.textContent='Create Account';}}
+function pslLogout(){pslClearSession();pslCurrentUser=null;pslDbInvalidate();renderWidget();}
+
+async function pslAuthInit(){injectAuthStyles();const session=pslLoadSession();if(session){try{const db=await pslDbGet();const uData=(db.users||{})[session.username.toLowerCase()];if(uData){pslCurrentUser={username:uData.username,email:uData.email,avatar:uData.avatar||null,isAdmin:uData.username.toLowerCase()===PSL_ADMIN};pslSaveSession(pslCurrentUser);}else{pslClearSession();}}catch(err){pslCurrentUser=session;}}renderWidget();}
+injectAuthStyles();
+document.addEventListener('DOMContentLoaded',pslAuthInit);
+</script>
+</body>
+</html>

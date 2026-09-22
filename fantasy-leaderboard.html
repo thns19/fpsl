@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pitchball Fantasy | Leaderboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="fantasy-style.css" />
+</head>
+<body data-page="leaderboard">
+  <div class="fantasy-shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">P</div>
+        <span>Pitchball Fantasy</span>
+      </div>
+      <nav class="topnav">
+        <a href="fantasy-index.html" class="nav-link">Index</a>
+        <a href="fantasy-build.html" class="nav-link">Build Your Team</a>
+        <a href="fantasy-leaderboard.html" class="nav-link active">Leaderboard</a>
+        <a href="fantasy-players.html" class="nav-link">Player Stats</a>
+      </nav>
+      <button id="sign-in-button" class="auth-button" type="button">Sign in</button>
+    </header>
+
+    <div class="page-header">
+      <div>
+        <p class="section-title">Table</p>
+        <h1>Leaderboard</h1>
+      </div>
+      <div class="status-pill"><span class="status-dot"></span>Live Rankings</div>
+    </div>
+
+    <section class="panel" style="padding: 18px; margin-top: 20px;">
+      <div class="table-card">
+        <table id="leaderboardTable"></table>
+      </div>
+    </section>
+  </div>
+
+  <div id="fantasy-auth-overlay" class="auth-overlay">
+    <div class="auth-modal">
+      <div class="auth-modal-header">
+        <h3>Sign in to continue</h3>
+        <button id="close-auth" type="button" class="small-btn">Close</button>
+      </div>
+      <form id="fantasy-auth-form" class="auth-form">
+        <label for="fantasy-username">Username</label>
+        <input id="fantasy-username" type="text" placeholder="Enter your Pitchball username" />
+        <button class="primary-btn" type="submit">Continue</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="fantasy-data.js"></script>
+  <script src="fantasy-app.js"></script>
+</body>
+</html>

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pitchball Fantasy | Build Your Team</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="fantasy-style.css" />
+</head>
+<body data-page="build">
+  <div class="fantasy-shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">P</div>
+        <span>Pitchball Fantasy</span>
+      </div>
+      <nav class="topnav">
+        <a href="fantasy-index.html" class="nav-link">Index</a>
+        <a href="fantasy-build.html" class="nav-link active">Build Your Team</a>
+        <a href="fantasy-leaderboard.html" class="nav-link">Leaderboard</a>
+        <a href="fantasy-players.html" class="nav-link">Player Stats</a>
+      </nav>
+      <button id="sign-in-button" class="auth-button" type="button">Sign in</button>
+    </header>
+
+    <div class="page-header">
+      <div>
+        <p class="section-title">Fantasy Draft</p>
+        <h1>Build Your Team</h1>
+      </div>
+      <div class="status-pill"><span class="status-dot"></span>Season Live</div>
+    </div>
+
+    <div id="auth-guard" class="auth-guard">
+      Sign in to save your squad. If you already have a Pitchball account, use the same username flow on the fantasy site.
+    </div>
+
+    <div class="budget-wrap panel" style="margin-top: 18px; padding: 18px;">
+      <div class="budget-box">
+        <div>
+          <div class="budget-label">Budget</div>
+          <div id="teamTotal" class="budget-value under">0.0m</div>
+        </div>
+      </div>
+      <div class="budget-box" style="flex: 1; min-width: 220px;">
+        <div style="width:100%;">
+          <div class="budget-label">Used / 40.0m</div>
+          <div class="progress" style="margin-top: 10px;">
+            <div id="budgetBar" class="progress-bar" style="width: 0%;"></div>
+          </div>
+        </div>
+      </div>
+      <div class="budget-box">
+        <div>
+          <div class="budget-label">Squad</div>
+          <div id="teamCount" class="budget-value">0/5</div>
+        </div>
+      </div>
+    </div>
+
+    <section class="team-layout" style="margin-top: 20px;">
+      <aside class="summary-card">
+        <h3>Selected Squad</h3>
+        <p class="summary-copy">Choose exactly 5 players. The team must be 4 starters and 1 substitute.</p>
+        <div id="teamSummary" class="selected-list"></div>
+        <div style="margin-top: 18px;">
+          <button id="saveTeam" class="primary-btn" type="button" onclick="saveFantasyTeamToStorage()">Save Team</button>
+        </div>
+      </aside>
+
+      <div class="panel" style="padding: 18px;">
+        <div class="section-header" style="margin-bottom: 18px;">
+          <h3 class="section-title">Available Players</h3>
+        </div>
+        <div id="playerList" class="player-list"></div>
+      </div>
+    </section>
+  </div>
+
+  <div id="fantasy-auth-overlay" class="auth-overlay">
+    <div class="auth-modal">
+      <div class="auth-modal-header">
+        <h3>Sign in to continue</h3>
+        <button id="close-auth" type="button" class="small-btn">Close</button>
+      </div>
+      <form id="fantasy-auth-form" class="auth-form">
+        <label for="fantasy-username">Username</label>
+        <input id="fantasy-username" type="text" placeholder="Enter your Pitchball username" />
+        <button class="primary-btn" type="submit">Continue</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="fantasy-data.js"></script>
+  <script src="fantasy-app.js"></script>
+</body>
+</html>
