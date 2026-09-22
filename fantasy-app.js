@@ -1,3 +1,25 @@
+function getPlayerMatchPoints(player) {
+  return (player.lastFiveMatches || [])
+    .map((match) => typeof match === 'number' ? match : match.fantasyPoints)
+    .filter((points) => Number.isFinite(Number(points)))
+    .map(Number);
+}
+
+function getPlayerForm(player) {
+  const points = getPlayerMatchPoints(player).slice(-5);
+  if (points.length === 0) return null;
+  return points.reduce((total, pointsInMatch) => total + pointsInMatch, 0) / points.length;
+}
+
+function getPlayerFantasyPoints(player) {
+  return getPlayerMatchPoints(player).reduce((total, pointsInMatch) => total + pointsInMatch, 0);
+}
+
+function formatPlayerForm(player) {
+  const form = getPlayerForm(player);
+  return form === null ? '\u2014' : form.toFixed(1);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   const navLinks = document.querySelectorAll('.nav-link');
   navLinks.forEach((link) => {
@@ -151,7 +173,7 @@ function renderBuildBoard() {
         <div class="player-header">
           <div>
             <div class="player-name">${player.name}</div>
-            <div class="player-meta"><span>Form ${player.form.toFixed(1)}</span><span>${player.fantasyPoints} pts</span></div>
+            <div class="player-meta"><span>Form ${formatPlayerForm(player)}</span><span>${getPlayerFantasyPoints(player)} pts</span></div>
           </div>
           <div class="player-value">${formatMoney(player.value)}</div>
         </div>
@@ -302,11 +324,11 @@ function renderPlayersTable() {
         <tr>
           <td>${player.name}</td>
           <td>${formatMoney(player.value)}</td>
-          <td>${player.form.toFixed(1)}</td>
+          <td>${formatPlayerForm(player)}</td>
           <td>${player.goals}</td>
           <td>${player.ownGoals}</td>
           <td>${player.mvps}</td>
-          <td>${player.fantasyPoints}</td>
+          <td>${getPlayerFantasyPoints(player)}</td>
         </tr>
       `).join('')}
     </tbody>
