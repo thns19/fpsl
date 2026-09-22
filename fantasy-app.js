@@ -124,7 +124,7 @@ function isFantasyAdmin() {
 }
 
 function transfersAreLocked() {
-  return fantasyMatchday?.status === 'active' && !isFantasyAdmin();
+  return fantasyMatchday?.status === 'active';
 }
 
 function showTransferLockMessage() {
@@ -292,6 +292,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('player-picker').hidden = true;
   });
 
+  document.getElementById('close-player-detail')?.addEventListener('click', () => {
+    document.getElementById('player-detail-overlay').hidden = true;
+  });
+  document.getElementById('player-detail-overlay')?.addEventListener('click', (event) => {
+    if (event.target.id === 'player-detail-overlay') event.currentTarget.hidden = true;
+  });
+
   if (signInButton && getCurrentFantasyUser()) {
     signInButton.textContent = `Signed in: ${getCurrentFantasyUser().username}`;
   }
@@ -340,7 +347,42 @@ function initBuildPage() {
     }
   }
 
+  renderBuildMatchdays();
   renderBuildBoard();
+}
+
+function renderBuildMatchdays() {
+  const container = document.getElementById('build-matchdays');
+  if (!container) return;
+
+  const activeMatchday = fantasyMatchdays.find((matchday) => matchday.status === 'active');
+  const upcoming = fantasyMatchdays.filter((matchday) => matchday.status === 'draft');
+  const ended = fantasyMatchdays.filter((matchday) => matchday.status === 'ended').slice().reverse();
+  const matchdays = [activeMatchday, ...upcoming, ...ended].filter(Boolean);
+
+  if (matchdays.length === 0) {
+    container.innerHTML = '<div class="matchday-empty">No matchdays have been created yet.</div>';
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="matchday-heading">
+      <div>
+        <p class="section-title">League calendar</p>
+        <h2>Matchdays</h2>
+      </div>
+      ${activeMatchday ? '<span class="matchday-lock">Transfers locked</span>' : '<span class="matchday-open">Transfers open</span>'}
+    </div>
+    <div class="matchday-list">
+      ${matchdays.map((matchday) => `
+        <div class="matchday-item ${matchday.status === 'active' ? 'is-active' : ''}">
+          <div><strong>MD${matchday.id}</strong><span>${matchday.name}</span></div>
+          <span class="matchday-status">${matchday.status === 'active' ? 'Live' : matchday.status === 'ended' ? 'Complete' : 'Upcoming'}</span>
+        </div>
+      `).join('')}
+    </div>
+    ${activeMatchday ? '<p class="matchday-notice">Matchday is live. Your saved team cannot be changed until the matchday ends.</p>' : '<p class="matchday-notice">Transfers are open until the next matchday begins.</p>'}
+  `;
 }
 
 function ensureFantasyLogin() {
@@ -433,6 +475,10 @@ function openPlayerPicker(slotIndex) {
 window.openPlayerPicker = openPlayerPicker;
 
 window.selectPlayerForSlot = function (playerId, slotIndex) {
+  if (!ensureFantasyLogin() || transfersAreLocked()) {
+    if (transfersAreLocked()) showTransferLockMessage();
+    return;
+  }
   const team = Array.from({ length: FANTASY_TEAM_SIZE }, (_, index) => getStoredFantasyTeam()[index] || null);
   const existingIndex = team.indexOf(playerId);
   if (existingIndex >= 0) team[existingIndex] = null;
@@ -623,7 +669,7 @@ function renderPlayersTable() {
     </thead>
     <tbody>
       ${FANTASY_PLAYERS.map((player) => `
-        <tr>
+        <tr class="player-table-row" onclick="openPlayerDetails('${player.id}')" tabindex="0" onkeydown="if(event.key === 'Enter' || event.key === ' ') openPlayerDetails('${player.id}')">
           <td>${player.name}</td>
           <td>${formatMoney(player.value)}</td>
           <td>${formatPlayerForm(player)}</td>
@@ -636,6 +682,54 @@ function renderPlayersTable() {
     </tbody>
   `;
 }
+
+function formatPlayerName(player) {
+  const parts = player.name.split(' ');
+  if (parts.length < 2) return { first: player.name, last: '' };
+  return { first: parts.slice(0, -1).join(' '), last: parts.at(-1) };
+}
+
+function openPlayerDetails(playerId) {
+  const player = getPlayerById(playerId);
+  const overlay = document.getElementById('player-detail-overlay');
+  const content = document.getElementById('player-detail-content');
+  if (!player || !overlay || !content) return;
+
+  const name = formatPlayerName(player);
+  const fixtures = Array.isArray(player.fixtures) ? player.fixtures : [];
+  const recentPoints = getPlayerMatchPoints(player).slice(-5);
+  const trend = recentPoints.length ? recentPoints.map((points) => `<span>${points}</span>`).join('') : '<span class="detail-empty">No matchday points yet</span>';
+  const fixtureMarkup = fixtures.length
+    ? fixtures.slice(0, 6).map((fixture) => `<div class="fixture-card"><small>${fixture.gameweek || 'Next'}</small><strong>${fixture.opponent || 'TBC'}</strong><span>${fixture.home ? 'H' : 'A'}</span></div>`).join('')
+    : '<p class="detail-empty">Fixtures will appear when matchday schedules are added.</p>';
+
+  content.innerHTML = `
+    <div class="detail-hero" style="--shirt-color: ${player.teamColor || '#00f0ff'}">
+      <div class="detail-shirt team-shirt"><span class="shirt-number">${player.shirtNumber || '-'}</span></div>
+      <div class="detail-identity">
+        <p>${player.position || 'Player'}${player.team ? ` · ${player.team}` : ''}</p>
+        <h2 id="player-detail-name">${name.first}<br><strong>${name.last}</strong></h2>
+        <span>${formatMoney(player.value)}</span>
+      </div>
+    </div>
+    <div class="detail-actions">
+      <a class="primary-btn" href="fantasy-build.html">Add to squad <span aria-hidden="true">&nearr;</span></a>
+      <button class="secondary-btn" type="button" onclick="document.getElementById('player-detail-overlay').hidden = true">Close</button>
+    </div>
+    <div class="detail-price-line"><span>Price</span><strong>${formatMoney(player.value)}</strong><em>${player.priceTrend || 'Price stable'}</em></div>
+    <div class="detail-metrics">
+      <div><small>Form</small><strong>${formatPlayerForm(player)}</strong></div>
+      <div><small>Pts / Match</small><strong>${recentPoints.length ? (getPlayerFantasyPoints(player) / recentPoints.length).toFixed(1) : '0.0'}</strong></div>
+      <div><small>Total points</small><strong>${getPlayerFantasyPoints(player)}</strong></div>
+    </div>
+    <section class="detail-section"><div class="detail-section-heading"><h3>Recent form</h3><span>Last ${recentPoints.length || 0} matches</span></div><div class="points-strip">${trend}</div></section>
+    <section class="detail-section"><div class="detail-section-heading"><h3>Fixtures</h3><span>Upcoming</span></div><div class="fixture-grid">${fixtureMarkup}</div></section>
+    <div class="detail-stat-grid"><div><small>Goals</small><strong>${player.goals || 0}</strong></div><div><small>Own goals</small><strong>${player.ownGoals || 0}</strong></div><div><small>MVPs</small><strong>${player.mvps || 0}</strong></div></div>
+  `;
+  overlay.hidden = false;
+}
+
+window.openPlayerDetails = openPlayerDetails;
 
 function renderAdminState() {
   const status = document.getElementById('admin-matchday-status');
