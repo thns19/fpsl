@@ -559,6 +559,220 @@ h1 span {
   gap: 18px;
 }
 
+.team-builder {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 20px;
+  align-items: start;
+}
+
+.pitch-panel {
+  padding: 22px;
+}
+
+.court-hint {
+  color: var(--dim);
+  font-size: 0.8rem;
+}
+
+.court-wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 150px;
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.pitchball-court {
+  position: relative;
+  min-height: 520px;
+  overflow: hidden;
+  border: 3px solid rgba(255,255,255,0.7);
+  border-radius: 18px;
+  background: linear-gradient(135deg, #167c62, #0d5e4b);
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.2), 0 16px 35px rgba(0,0,0,0.22);
+}
+
+.pitchball-court::before,
+.pitchball-court::after {
+  content: '';
+  position: absolute;
+  border: 2px solid rgba(255,255,255,0.55);
+  pointer-events: none;
+}
+
+.pitchball-court::before {
+  inset: 12% 9%;
+  border-radius: 10px;
+}
+
+.pitchball-court::after {
+  width: 42%;
+  height: 22%;
+  left: 29%;
+  top: 39%;
+  border-radius: 50%;
+}
+
+.court-mark {
+  position: absolute;
+  z-index: 1;
+  background: rgba(255,255,255,0.55);
+  pointer-events: none;
+}
+
+.court-center-line {
+  top: 50%;
+  left: 9%;
+  right: 9%;
+  height: 2px;
+}
+
+.court-center-circle {
+  width: 10px;
+  height: 10px;
+  top: calc(50% - 5px);
+  left: calc(50% - 5px);
+  border-radius: 50%;
+}
+
+.court-slot,
+.bench-slot {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 132px;
+  min-height: 112px;
+}
+
+.court-slot-1 { top: 17%; left: 16%; }
+.court-slot-2 { top: 17%; right: 16%; }
+.court-slot-3 { bottom: 17%; left: 16%; }
+.court-slot-4 { bottom: 17%; right: 16%; }
+
+.bench-panel {
+  min-height: 520px;
+  padding: 18px 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.03);
+}
+
+.bench-slot {
+  position: relative;
+  width: 100%;
+  min-height: 170px;
+  margin-top: 28px;
+}
+
+.add-slot {
+  display: grid;
+  place-items: center;
+  gap: 5px;
+  width: 100px;
+  min-height: 92px;
+  border: 1px dashed rgba(255,255,255,0.6);
+  border-radius: 12px;
+  background: rgba(0,0,0,0.12);
+  color: rgba(255,255,255,0.9);
+  cursor: pointer;
+}
+
+.add-slot span {
+  font-size: 2.3rem;
+  font-weight: 300;
+  line-height: 1;
+}
+
+.add-slot small,
+.shirt-player small,
+.picker-player small {
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.shirt-player {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  border: 0;
+  background: none;
+  color: var(--text);
+  cursor: pointer;
+  text-align: center;
+}
+
+.team-shirt {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 62px;
+  border-radius: 9px 9px 16px 16px;
+  background: var(--shirt-color);
+  color: #05010f;
+  clip-path: polygon(20% 0, 36% 10%, 64% 10%, 80% 0, 100% 23%, 82% 38%, 78% 100%, 22% 100%, 18% 38%, 0 23%);
+  box-shadow: 0 7px 16px rgba(0,0,0,0.25);
+}
+
+.shirt-number { font-weight: 800; }
+
+.mini-shirt {
+  width: 42px;
+  height: 46px;
+  flex: 0 0 auto;
+}
+
+.player-picker-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(0,0,0,0.74);
+}
+
+.player-picker-overlay[hidden] { display: none; }
+
+.player-picker-modal {
+  width: min(100%, 560px);
+  max-height: min(720px, 90vh);
+  overflow: auto;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--panel-strong);
+  box-shadow: var(--shadow);
+}
+
+.player-picker-list {
+  display: grid;
+  gap: 8px;
+}
+
+.picker-player {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(255,255,255,0.03);
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.picker-player:hover,
+.add-slot:hover { border-color: var(--cyan); }
+
+.picker-player span:last-child {
+  display: grid;
+  gap: 3px;
+}
+
 .summary-card {
   padding: 18px;
 }
@@ -744,6 +958,23 @@ tr:last-child td {
 
   .team-layout {
     grid-template-columns: 1fr;
+  }
+
+  .team-builder {
+    grid-template-columns: 1fr;
+  }
+
+  .court-wrap {
+    grid-template-columns: 1fr;
+  }
+
+  .bench-panel {
+    min-height: 0;
+  }
+
+  .bench-slot {
+    min-height: 120px;
+    margin-top: 8px;
   }
 
   .topbar {

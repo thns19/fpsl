@@ -60,23 +60,53 @@
       </div>
     </div>
 
-    <section class="team-layout" style="margin-top: 20px;">
+    <section class="team-builder" style="margin-top: 20px;">
+      <div class="panel pitch-panel">
+        <div class="section-header">
+          <div>
+            <p class="section-title">Starting four</p>
+            <h2>Pitchball Court</h2>
+          </div>
+          <span class="court-hint">Select a plus to add a player</span>
+        </div>
+        <div class="court-wrap">
+          <div class="pitchball-court" aria-label="Starting player positions">
+            <div class="court-mark court-center-line"></div>
+            <div class="court-mark court-center-circle"></div>
+            <div class="court-slot court-slot-1" data-slot="0"></div>
+            <div class="court-slot court-slot-2" data-slot="1"></div>
+            <div class="court-slot court-slot-3" data-slot="2"></div>
+            <div class="court-slot court-slot-4" data-slot="3"></div>
+          </div>
+          <aside class="bench-panel">
+            <p class="section-title">Substitute</p>
+            <div class="bench-slot" data-slot="4"></div>
+          </aside>
+        </div>
+      </div>
+
       <aside class="summary-card">
         <h3>Selected Squad</h3>
-        <p class="summary-copy">Choose exactly 5 players. The team must be 4 starters and 1 substitute.</p>
+        <p class="summary-copy">Choose four starters on court and one substitute on the bench.</p>
         <div id="teamSummary" class="selected-list"></div>
         <div style="margin-top: 18px;">
           <button id="saveTeam" class="primary-btn" type="button" onclick="saveFantasyTeamToStorage()">Save Team</button>
         </div>
       </aside>
-
-      <div class="panel" style="padding: 18px;">
-        <div class="section-header" style="margin-bottom: 18px;">
-          <h3 class="section-title">Available Players</h3>
-        </div>
-        <div id="playerList" class="player-list"></div>
-      </div>
     </section>
+  </div>
+
+  <div id="player-picker" class="player-picker-overlay" hidden>
+    <div class="player-picker-modal">
+      <div class="auth-modal-header">
+        <div>
+          <p class="section-title">Choose player</p>
+          <h3 id="player-picker-title">Add to squad</h3>
+        </div>
+        <button id="close-player-picker" type="button" class="small-btn">Close</button>
+      </div>
+      <div id="player-picker-list" class="player-picker-list"></div>
+    </div>
   </div>
 
   <div id="fantasy-auth-overlay" class="auth-overlay">

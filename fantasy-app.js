@@ -37,11 +37,17 @@ async function getFantasyDb() {
 
 async function loadFantasyState() {
   try {
-    const db = await getFantasyDb();
+    let db = await getFantasyDb();
     fantasyMatchdays = Array.isArray(db.fantasyMatchdays)
       ? db.fantasyMatchdays
       : db.fantasyMatchday ? [db.fantasyMatchday] : [];
     fantasyMatchday = fantasyMatchdays.find((matchday) => matchday.status === 'active') || null;
+    selectedFantasyMatchdayId = db.fantasyAdminState?.selectedMatchdayId || fantasyMatchdays.at(-1)?.id || null;
+    if (!Array.isArray(db.fantasyMatchdays) && fantasyMatchdays.length > 0) {
+      const { fantasyMatchday: legacyMatchday, ...currentDb } = db;
+      db = { ...currentDb, fantasyMatchdays, fantasyAdminState: { selectedMatchdayId: selectedFantasyMatchdayId } };
+      await saveFantasyDb(db);
+    }
     applyAggregatedPlayerStats(fantasyMatchdays);
   } catch (error) {
     fantasyMatchday = null;
@@ -99,6 +105,17 @@ async function saveFantasyDb(db) {
   });
   if (!response.ok) throw new Error('Unable to save fantasy data.');
   fantasyDbCache = db;
+}
+
+async function saveSelectedMatchdayId(matchdayId) {
+  const db = await getFantasyDb();
+  await saveFantasyDb({
+    ...db,
+    fantasyAdminState: {
+      ...(db.fantasyAdminState || {}),
+      selectedMatchdayId: matchdayId
+    }
+  });
 }
 
 function isFantasyAdmin() {
@@ -271,6 +288,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
+  document.getElementById('close-player-picker')?.addEventListener('click', () => {
+    document.getElementById('player-picker').hidden = true;
+  });
+
   if (signInButton && getCurrentFantasyUser()) {
     signInButton.textContent = `Signed in: ${getCurrentFantasyUser().username}`;
   }
@@ -334,16 +355,17 @@ function ensureFantasyLogin() {
 }
 
 function renderBuildBoard() {
-  const playerList = document.getElementById('playerList');
   const teamSummary = document.getElementById('teamSummary');
   const teamTotalLabel = document.getElementById('teamTotal');
   const teamCountLabel = document.getElementById('teamCount');
   const budgetBar = document.getElementById('budgetBar');
 
-  if (!playerList || !teamSummary) return;
+  if (!teamSummary) return;
 
-  const team = getStoredFantasyTeam();
-  const total = getTeamTotal(team);
+  const storedTeam = getStoredFantasyTeam();
+  const team = Array.from({ length: FANTASY_TEAM_SIZE }, (_, index) => storedTeam[index] || null);
+  const occupiedTeam = team.filter(Boolean);
+  const total = getTeamTotal(occupiedTeam);
   const remaining = FANTASY_TEAM_LIMIT - total;
 
   if (teamTotalLabel) {
@@ -352,7 +374,7 @@ function renderBuildBoard() {
   }
 
   if (teamCountLabel) {
-    teamCountLabel.textContent = `${team.length}/${FANTASY_TEAM_SIZE}`;
+    teamCountLabel.textContent = `${occupiedTeam.length}/${FANTASY_TEAM_SIZE}`;
   }
 
   if (budgetBar) {
@@ -360,7 +382,7 @@ function renderBuildBoard() {
     budgetBar.style.width = `${usage}%`;
   }
 
-  const selectedPlayers = team.map((playerId) => getPlayerById(playerId)).filter(Boolean);
+  const selectedPlayers = occupiedTeam.map((playerId) => getPlayerById(playerId)).filter(Boolean);
   if (selectedPlayers.length === 0) {
     teamSummary.innerHTML = '<p class="empty-state">Your squad is empty. Pick your five-man team from the list below.</p>';
   } else {
@@ -375,32 +397,62 @@ function renderBuildBoard() {
     `).join('');
   }
 
-  playerList.innerHTML = FANTASY_PLAYERS.map((player) => {
-    const isSelected = team.includes(player.id);
-    const isSub = team.length > 0 && team[team.length - 1] === player.id && team.length === FANTASY_TEAM_SIZE;
-    const buttonText = isSelected ? 'Selected' : 'Add';
-    const className = isSelected ? 'selected' : '';
-    return `
-      <div class="player-card">
-        <div class="player-header">
-          <div>
-            <div class="player-name">${player.name}</div>
-            <div class="player-meta"><span>Form ${formatPlayerForm(player)}</span><span>${getPlayerFantasyPoints(player)} pts</span></div>
-          </div>
-          <div class="player-value">${formatMoney(player.value)}</div>
-        </div>
-        <div class="player-meta">
-          <span>Goals ${player.goals}</span>
-          <span>MVPs ${player.mvps}</span>
-        </div>
-        <div class="player-actions">
-          <button class="small-btn ${className}" type="button" onclick="togglePlayerTeam('${player.id}')">${buttonText}</button>
-          ${isSelected ? '<button class="small-btn" type="button" onclick="makeSubPlayer(event, \'${player.id}\')">Mark as sub</button>' : ''}
-        </div>
-      </div>
-    `;
-  }).join('');
+  document.querySelectorAll('[data-slot]').forEach((slot) => {
+    const slotIndex = Number(slot.dataset.slot);
+    const player = getPlayerById(team[slotIndex]);
+    slot.innerHTML = player ? `
+      <button class="shirt-player" type="button" onclick="removePlayerFromSlot(${slotIndex})" aria-label="Remove ${player.name}">
+        <span class="team-shirt" style="--shirt-color: ${player.teamColor || '#00f0ff'}"><span class="shirt-number">${slotIndex + 1}</span></span>
+        <strong>${player.name}</strong>
+        <small>${slotIndex === 4 ? 'Substitute' : 'Starter'}</small>
+      </button>
+    ` : `<button class="add-slot" type="button" onclick="openPlayerPicker(${slotIndex})" aria-label="Add ${slotIndex === 4 ? 'substitute' : 'starter'}"><span>+</span><small>${slotIndex === 4 ? 'Add substitute' : 'Add player'}</small></button>`;
+  });
 }
+
+function openPlayerPicker(slotIndex) {
+  if (!ensureFantasyLogin()) return;
+  if (transfersAreLocked()) {
+    showTransferLockMessage();
+    return;
+  }
+  const picker = document.getElementById('player-picker');
+  const list = document.getElementById('player-picker-list');
+  const team = getStoredFantasyTeam();
+  const selected = team[slotIndex];
+  document.getElementById('player-picker-title').textContent = slotIndex === 4 ? 'Choose substitute' : `Choose starter ${slotIndex + 1}`;
+  list.innerHTML = FANTASY_PLAYERS.filter((player) => !team.includes(player.id) || player.id === selected).map((player) => `
+    <button class="picker-player" type="button" onclick="selectPlayerForSlot('${player.id}', ${slotIndex})">
+      <span class="team-shirt mini-shirt" style="--shirt-color: ${player.teamColor || '#00f0ff'}"><span class="shirt-number">${slotIndex + 1}</span></span>
+      <span><strong>${player.name}</strong><small>${formatMoney(player.value)} · ${getPlayerFantasyPoints(player)} pts</small></span>
+    </button>
+  `).join('') || '<p class="empty-state">All players are already in your squad.</p>';
+  picker.hidden = false;
+}
+
+window.openPlayerPicker = openPlayerPicker;
+
+window.selectPlayerForSlot = function (playerId, slotIndex) {
+  const team = Array.from({ length: FANTASY_TEAM_SIZE }, (_, index) => getStoredFantasyTeam()[index] || null);
+  const existingIndex = team.indexOf(playerId);
+  if (existingIndex >= 0) team[existingIndex] = null;
+  team[slotIndex] = playerId;
+  if (getTeamTotal(team.filter(Boolean)) > FANTASY_TEAM_LIMIT) {
+    alert('This selection would exceed the 40.0M budget.');
+    return;
+  }
+  saveFantasyTeam(team);
+  document.getElementById('player-picker').hidden = true;
+  renderBuildBoard();
+};
+
+window.removePlayerFromSlot = function (slotIndex) {
+  if (!ensureFantasyLogin() || transfersAreLocked()) return;
+  const team = Array.from({ length: FANTASY_TEAM_SIZE }, (_, index) => getStoredFantasyTeam()[index] || null);
+  team[slotIndex] = null;
+  saveFantasyTeam(team);
+  renderBuildBoard();
+};
 
 window.togglePlayerTeam = function (playerId) {
   if (!ensureFantasyLogin()) {
@@ -476,7 +528,7 @@ window.saveFantasyTeamToStorage = async function () {
     showTransferLockMessage();
     return;
   }
-  const team = getStoredFantasyTeam();
+  const team = getStoredFantasyTeam().filter(Boolean);
   if (team.length !== FANTASY_TEAM_SIZE) {
     alert('Your squad must contain exactly 5 players.');
     return;
@@ -652,7 +704,11 @@ async function createFantasyMatchday() {
   };
   fantasyMatchdays = [...fantasyMatchdays, matchday];
   selectedFantasyMatchdayId = matchday.id;
-  await saveFantasyDb({ ...db, fantasyMatchdays });
+  await saveFantasyDb({
+    ...db,
+    fantasyMatchdays,
+    fantasyAdminState: { ...(db.fantasyAdminState || {}), selectedMatchdayId: selectedFantasyMatchdayId }
+  });
   renderAdminState();
   renderAdminPlayers();
 }
@@ -697,7 +753,12 @@ async function deleteFantasyMatchday() {
   fantasyMatchday = fantasyMatchdays.find((matchday) => matchday.status === 'active') || null;
   const users = { ...(db.users || {}) };
   recalculateManagerTotals(users, fantasyMatchdays);
-  await saveFantasyDb({ ...db, users, fantasyMatchdays });
+  await saveFantasyDb({
+    ...db,
+    users,
+    fantasyMatchdays,
+    fantasyAdminState: { ...(db.fantasyAdminState || {}), selectedMatchdayId: selectedFantasyMatchdayId }
+  });
   applyAggregatedPlayerStats(fantasyMatchdays);
   renderAdminState();
   renderAdminPlayers();
@@ -740,13 +801,16 @@ function initAdminPage() {
   }
   if (guard) guard.hidden = true;
   if (panel) panel.hidden = false;
-  selectedFantasyMatchdayId = fantasyMatchdays[fantasyMatchdays.length - 1]?.id || null;
+  if (!fantasyMatchdays.some((matchday) => String(matchday.id) === String(selectedFantasyMatchdayId))) {
+    selectedFantasyMatchdayId = fantasyMatchdays.at(-1)?.id || null;
+  }
   renderAdminState();
   renderAdminPlayers();
   document.getElementById('admin-matchday-select')?.addEventListener('change', (event) => {
-    selectedFantasyMatchdayId = event.target.value;
+    selectedFantasyMatchdayId = Number(event.target.value) || null;
     renderAdminState();
     renderAdminPlayers();
+    saveSelectedMatchdayId(selectedFantasyMatchdayId).catch((error) => alert(error.message));
   });
   document.getElementById('admin-create-matchday')?.addEventListener('click', () => createFantasyMatchday().catch((error) => alert(error.message)));
   document.getElementById('admin-start-matchday')?.addEventListener('click', () => startFantasyMatchday().catch((error) => alert(error.message)));
