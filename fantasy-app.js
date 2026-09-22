@@ -24,6 +24,8 @@ const FANTASY_DB_URL = 'https://ptchbl4-default-rtdb.europe-west1.firebasedataba
 const FANTASY_ADMIN_USERNAME = 'pitchball';
 let fantasyDbCache = null;
 let fantasyMatchday = null;
+let fantasyMatchdays = [];
+let selectedFantasyMatchdayId = null;
 
 async function getFantasyDb() {
   if (fantasyDbCache) return fantasyDbCache;
@@ -36,14 +38,57 @@ async function getFantasyDb() {
 async function loadFantasyState() {
   try {
     const db = await getFantasyDb();
-    fantasyMatchday = db.fantasyMatchday || null;
-    const remotePlayers = db.fantasyPlayers || {};
-    FANTASY_PLAYERS.forEach((player) => {
-      if (remotePlayers[player.id]) Object.assign(player, remotePlayers[player.id]);
-    });
+    fantasyMatchdays = Array.isArray(db.fantasyMatchdays)
+      ? db.fantasyMatchdays
+      : db.fantasyMatchday ? [db.fantasyMatchday] : [];
+    fantasyMatchday = fantasyMatchdays.find((matchday) => matchday.status === 'active') || null;
+    applyAggregatedPlayerStats(fantasyMatchdays);
   } catch (error) {
     fantasyMatchday = null;
+    fantasyMatchdays = [];
   }
+}
+
+function applyAggregatedPlayerStats(matchdays) {
+  const totals = {};
+  matchdays.forEach((matchday) => {
+    Object.entries(matchday.playerStats || {}).forEach(([playerId, stats]) => {
+      const total = totals[playerId] || { goals: 0, ownGoals: 0, mvps: 0, points: [] };
+      total.goals += Number(stats.goals) || 0;
+      total.ownGoals += Number(stats.ownGoals) || 0;
+      total.mvps += Number(stats.mvps) || 0;
+      if (Number.isFinite(Number(stats.matchdayPoints))) total.points.push(Number(stats.matchdayPoints));
+      totals[playerId] = total;
+    });
+  });
+  FANTASY_PLAYERS.forEach((player) => {
+    const total = totals[player.id] || { goals: 0, ownGoals: 0, mvps: 0, points: [] };
+    Object.assign(player, {
+      goals: total.goals,
+      ownGoals: total.ownGoals,
+      mvps: total.mvps,
+      lastFiveMatches: total.points.slice(-5),
+      matchdayPoints: total.points[total.points.length - 1] || 0
+    });
+  });
+}
+
+function recalculateManagerTotals(users, matchdays) {
+  Object.keys(users).forEach((accountKey) => {
+    const user = users[accountKey];
+    if (!Array.isArray(user.fantasyTeam)) return;
+    const fantasyPoints = matchdays
+      .filter((matchday) => matchday.status === 'ended')
+      .reduce((total, matchday) => total + user.fantasyTeam.reduce((teamTotal, playerId) => (
+        teamTotal + (Number(matchday.playerStats?.[playerId]?.matchdayPoints) || 0)
+      ), 0), 0);
+    const lastMatchday = matchdays.filter((matchday) => matchday.status === 'ended').at(-1);
+    users[accountKey] = {
+      ...user,
+      fantasyPoints,
+      matchday: lastMatchday?.id || 0
+    };
+  });
 }
 
 async function saveFantasyDb(db) {
@@ -544,30 +589,44 @@ function renderAdminState() {
   const status = document.getElementById('admin-matchday-status');
   const startButton = document.getElementById('admin-start-matchday');
   const endButton = document.getElementById('admin-end-matchday');
+  const deleteButton = document.getElementById('admin-delete-matchday');
+  const selector = document.getElementById('admin-matchday-select');
   if (!status) return;
 
-  if (!fantasyMatchday) {
+  if (selector) {
+    selector.innerHTML = fantasyMatchdays.length === 0
+      ? '<option value="">No matchdays created</option>'
+      : fantasyMatchdays.map((matchday) => `<option value="${matchday.id}">Matchday ${matchday.id}: ${matchday.name} (${matchday.status})</option>`).join('');
+    selector.value = selectedFantasyMatchdayId || '';
+  }
+
+  const selected = fantasyMatchdays.find((matchday) => String(matchday.id) === String(selectedFantasyMatchdayId));
+  if (!selected) {
     status.textContent = 'No matchday created';
     if (startButton) startButton.disabled = true;
     if (endButton) endButton.disabled = true;
+    if (deleteButton) deleteButton.disabled = true;
     return;
   }
 
-  status.textContent = `Matchday ${fantasyMatchday.id}: ${fantasyMatchday.name} (${fantasyMatchday.status})`;
-  if (startButton) startButton.disabled = fantasyMatchday.status !== 'draft';
-  if (endButton) endButton.disabled = fantasyMatchday.status !== 'active';
+  status.textContent = `Matchday ${selected.id}: ${selected.name} (${selected.status})`;
+  if (startButton) startButton.disabled = selected.status !== 'draft';
+  if (endButton) endButton.disabled = selected.status !== 'active';
+  if (deleteButton) deleteButton.disabled = selected.status === 'active';
 }
 
 function renderAdminPlayers() {
   const container = document.getElementById('admin-player-list');
   if (!container) return;
+  const selected = fantasyMatchdays.find((matchday) => String(matchday.id) === String(selectedFantasyMatchdayId));
+  const selectedStats = selected?.playerStats || {};
   container.innerHTML = FANTASY_PLAYERS.map((player) => `
     <div class="admin-player-row" data-player-id="${player.id}">
       <strong>${player.name}</strong>
-      <label>Goals <input type="number" min="0" value="${Number(player.goals) || 0}" data-stat="goals"></label>
-      <label>Own goals <input type="number" min="0" value="${Number(player.ownGoals) || 0}" data-stat="ownGoals"></label>
-      <label>MVPs <input type="number" min="0" value="${Number(player.mvps) || 0}" data-stat="mvps"></label>
-      <label>Matchday points <input type="number" value="${Number(player.matchdayPoints) || 0}" data-stat="matchdayPoints"></label>
+      <label>Goals <input type="number" min="0" value="${Number(selectedStats[player.id]?.goals) || 0}" data-stat="goals"></label>
+      <label>Own goals <input type="number" min="0" value="${Number(selectedStats[player.id]?.ownGoals) || 0}" data-stat="ownGoals"></label>
+      <label>MVPs <input type="number" min="0" value="${Number(selectedStats[player.id]?.mvps) || 0}" data-stat="mvps"></label>
+      <label>Matchday points <input type="number" value="${Number(selectedStats[player.id]?.matchdayPoints) || 0}" data-stat="matchdayPoints"></label>
     </div>
   `).join('');
 }
@@ -580,67 +639,93 @@ async function createFantasyMatchday() {
     alert('Enter a matchday name first.');
     return;
   }
-  if (fantasyMatchday?.status === 'active') {
+  if (fantasyMatchdays.some((matchday) => matchday.status === 'active')) {
     alert('End the active matchday before creating another one.');
     return;
   }
   const db = await getFantasyDb();
-  fantasyMatchday = {
-    id: Number(fantasyMatchday?.id || 0) + 1,
+  const matchday = {
+    id: fantasyMatchdays.reduce((highest, current) => Math.max(highest, Number(current.id) || 0), 0) + 1,
     name,
     status: 'draft',
     createdAt: new Date().toISOString()
   };
-  await saveFantasyDb({ ...db, fantasyMatchday });
+  fantasyMatchdays = [...fantasyMatchdays, matchday];
+  selectedFantasyMatchdayId = matchday.id;
+  await saveFantasyDb({ ...db, fantasyMatchdays });
   renderAdminState();
+  renderAdminPlayers();
 }
 
 async function startFantasyMatchday() {
-  if (!isFantasyAdmin() || !fantasyMatchday || fantasyMatchday.status !== 'draft') return;
+  const selected = fantasyMatchdays.find((matchday) => String(matchday.id) === String(selectedFantasyMatchdayId));
+  if (!isFantasyAdmin() || !selected || selected.status !== 'draft') return;
   const db = await getFantasyDb();
-  fantasyMatchday = { ...fantasyMatchday, status: 'active', startedAt: new Date().toISOString() };
-  await saveFantasyDb({ ...db, fantasyMatchday });
+  fantasyMatchdays = fantasyMatchdays.map((matchday) => matchday.id === selected.id
+    ? { ...matchday, status: 'active', startedAt: new Date().toISOString() }
+    : matchday);
+  fantasyMatchday = fantasyMatchdays.find((matchday) => matchday.status === 'active');
+  await saveFantasyDb({ ...db, fantasyMatchdays });
   renderAdminState();
 }
 
 async function endFantasyMatchday() {
-  if (!isFantasyAdmin() || !fantasyMatchday || fantasyMatchday.status !== 'active') return;
+  const selected = fantasyMatchdays.find((matchday) => String(matchday.id) === String(selectedFantasyMatchdayId));
+  if (!isFantasyAdmin() || !selected || selected.status !== 'active') return;
   const db = await getFantasyDb();
-  const players = db.fantasyPlayers || {};
   const users = { ...(db.users || {}) };
-  Object.keys(users).forEach((accountKey) => {
-    const user = users[accountKey];
-    if (!Array.isArray(user.fantasyTeam) || user.fantasyTeam.length !== FANTASY_TEAM_SIZE) return;
-    const points = user.fantasyTeam.reduce((total, playerId) => total + (Number(players[playerId]?.matchdayPoints) || 0), 0);
-    users[accountKey] = {
-      ...user,
-      fantasyPoints: (Number(user.fantasyPoints) || 0) + points,
-      matchday: fantasyMatchday.id
-    };
-  });
-  fantasyMatchday = { ...fantasyMatchday, status: 'ended', endedAt: new Date().toISOString() };
-  await saveFantasyDb({ ...db, users, fantasyMatchday });
+  const endedMatchdays = fantasyMatchdays.map((matchday) => matchday.id === selected.id
+    ? { ...matchday, status: 'ended', endedAt: new Date().toISOString() }
+    : matchday);
+  fantasyMatchdays = endedMatchdays;
+  fantasyMatchday = null;
+  recalculateManagerTotals(users, fantasyMatchdays);
+  await saveFantasyDb({ ...db, users, fantasyMatchdays });
+  applyAggregatedPlayerStats(fantasyMatchdays);
   renderAdminState();
+  renderAdminPlayers();
   alert('Matchday ended and points were added to submitted teams.');
+}
+
+async function deleteFantasyMatchday() {
+  const selected = fantasyMatchdays.find((matchday) => String(matchday.id) === String(selectedFantasyMatchdayId));
+  if (!isFantasyAdmin() || !selected || selected.status === 'active') return;
+  if (!confirm(`Delete Matchday ${selected.id}: ${selected.name}?`)) return;
+  const db = await getFantasyDb();
+  fantasyMatchdays = fantasyMatchdays.filter((matchday) => matchday.id !== selected.id);
+  selectedFantasyMatchdayId = fantasyMatchdays[0]?.id || null;
+  fantasyMatchday = fantasyMatchdays.find((matchday) => matchday.status === 'active') || null;
+  const users = { ...(db.users || {}) };
+  recalculateManagerTotals(users, fantasyMatchdays);
+  await saveFantasyDb({ ...db, users, fantasyMatchdays });
+  applyAggregatedPlayerStats(fantasyMatchdays);
+  renderAdminState();
+  renderAdminPlayers();
 }
 
 async function saveFantasyPlayerStats() {
   if (!isFantasyAdmin()) return;
+  const selected = fantasyMatchdays.find((matchday) => String(matchday.id) === String(selectedFantasyMatchdayId));
+  if (!selected) {
+    alert('Create or select a matchday first.');
+    return;
+  }
   const db = await getFantasyDb();
-  const fantasyPlayers = { ...(db.fantasyPlayers || {}) };
+  const playerStats = { ...(selected.playerStats || {}) };
   document.querySelectorAll('.admin-player-row').forEach((row) => {
     const playerId = row.dataset.playerId;
     const stats = {};
     row.querySelectorAll('[data-stat]').forEach((input) => {
       stats[input.dataset.stat] = Number(input.value) || 0;
     });
-    const existing = fantasyPlayers[playerId] || {};
-    fantasyPlayers[playerId] = { ...existing, ...stats };
+    const existing = playerStats[playerId] || {};
+    playerStats[playerId] = { ...existing, ...stats };
   });
-  await saveFantasyDb({ ...db, fantasyPlayers });
-  FANTASY_PLAYERS.forEach((player) => {
-    if (fantasyPlayers[player.id]) Object.assign(player, fantasyPlayers[player.id]);
-  });
+  fantasyMatchdays = fantasyMatchdays.map((matchday) => matchday.id === selected.id ? { ...matchday, playerStats } : matchday);
+  const users = { ...(db.users || {}) };
+  recalculateManagerTotals(users, fantasyMatchdays);
+  await saveFantasyDb({ ...db, users, fantasyMatchdays });
+  applyAggregatedPlayerStats(fantasyMatchdays);
   renderPlayersTable();
   alert('Player stats saved.');
 }
@@ -655,10 +740,17 @@ function initAdminPage() {
   }
   if (guard) guard.hidden = true;
   if (panel) panel.hidden = false;
+  selectedFantasyMatchdayId = fantasyMatchdays[fantasyMatchdays.length - 1]?.id || null;
   renderAdminState();
   renderAdminPlayers();
+  document.getElementById('admin-matchday-select')?.addEventListener('change', (event) => {
+    selectedFantasyMatchdayId = event.target.value;
+    renderAdminState();
+    renderAdminPlayers();
+  });
   document.getElementById('admin-create-matchday')?.addEventListener('click', () => createFantasyMatchday().catch((error) => alert(error.message)));
   document.getElementById('admin-start-matchday')?.addEventListener('click', () => startFantasyMatchday().catch((error) => alert(error.message)));
   document.getElementById('admin-end-matchday')?.addEventListener('click', () => endFantasyMatchday().catch((error) => alert(error.message)));
+  document.getElementById('admin-delete-matchday')?.addEventListener('click', () => deleteFantasyMatchday().catch((error) => alert(error.message)));
   document.getElementById('admin-save-stats')?.addEventListener('click', () => saveFantasyPlayerStats().catch((error) => alert(error.message)));
 }

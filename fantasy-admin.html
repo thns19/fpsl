@@ -47,14 +47,18 @@
           </div>
         </div>
         <div class="admin-controls">
+          <label>Editing matchday
+            <select id="admin-matchday-select"></select>
+          </label>
           <label>Matchday name
             <input id="admin-matchday-name" type="text" placeholder="e.g. Matchday 1" />
           </label>
           <button id="admin-create-matchday" class="primary-btn" type="button">Create matchday</button>
           <button id="admin-start-matchday" class="secondary-btn" type="button">Start matchday</button>
           <button id="admin-end-matchday" class="secondary-btn" type="button">End matchday</button>
+          <button id="admin-delete-matchday" class="secondary-btn danger-btn" type="button">Delete matchday</button>
         </div>
-        <p class="admin-help">Starting a matchday locks team transfers. Ending it applies each submitted player's matchday points to manager totals.</p>
+        <p class="admin-help">Select any matchday to edit its results. Starting a matchday locks team transfers. Ending it applies points to manager totals.</p>
       </section>
 
       <section class="panel admin-section">

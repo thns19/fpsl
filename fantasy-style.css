@@ -232,6 +232,7 @@ button, input, select { font: inherit; }
 }
 
 .admin-controls input,
+.admin-controls select,
 .admin-player-row input {
   min-width: 110px;
   border: 1px solid var(--border);
@@ -239,6 +240,10 @@ button, input, select { font: inherit; }
   padding: 10px 12px;
   background: rgba(255,255,255,0.04);
   color: var(--text);
+}
+
+.danger-btn {
+  color: var(--red);
 }
 
 .admin-help {
