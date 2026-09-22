@@ -48,6 +48,13 @@ async function loadFantasyState() {
       db = { ...currentDb, fantasyMatchdays, fantasyAdminState: { selectedMatchdayId: selectedFantasyMatchdayId } };
       await saveFantasyDb(db);
     }
+    const currentUser = getCurrentFantasyUser();
+    const account = currentUser ? db.users?.[currentUser.username.toLowerCase()] : null;
+    if (account?.fantasyCaptain && !getStoredFantasyCaptain()) saveFantasyCaptain(account.fantasyCaptain);
+    if (account?.fantasyViceCaptain && !getStoredFantasyViceCaptain()) saveFantasyViceCaptain(account.fantasyViceCaptain);
+    if (account?.fantasySubmittedMatchdayId && !getFantasySubmissionState()) {
+      saveFantasySubmissionState({ matchdayId: account.fantasySubmittedMatchdayId, transfersUsed: Number(account.fantasyTransfersUsed) || 0 });
+    }
     applyAggregatedPlayerStats(fantasyMatchdays);
   } catch (error) {
     fantasyMatchday = null;
@@ -85,9 +92,10 @@ function recalculateManagerTotals(users, matchdays) {
     if (!Array.isArray(user.fantasyTeam)) return;
     const fantasyPoints = matchdays
       .filter((matchday) => matchday.status === 'ended')
-      .reduce((total, matchday) => total + user.fantasyTeam.reduce((teamTotal, playerId) => (
-        teamTotal + (Number(matchday.playerStats?.[playerId]?.matchdayPoints) || 0)
-      ), 0), 0);
+      .reduce((total, matchday) => total + user.fantasyTeam.reduce((teamTotal, playerId) => {
+        const points = Number(matchday.playerStats?.[playerId]?.matchdayPoints) || 0;
+        return teamTotal + points * (playerId === user.fantasyCaptain ? 2 : 1);
+      }, 0), 0);
     const lastMatchday = matchdays.filter((matchday) => matchday.status === 'ended').at(-1);
     users[accountKey] = {
       ...user,
@@ -124,11 +132,36 @@ function isFantasyAdmin() {
 }
 
 function transfersAreLocked() {
-  return fantasyMatchday?.status === 'active';
+  if (!fantasyMatchday) return false;
+  const state = getFantasySubmissionState();
+  const transferLimit = getMatchdayTransferLimit(fantasyMatchday);
+  return !state || Number(state.matchdayId) !== Number(fantasyMatchday.id) || Number(state.transfersUsed) >= transferLimit;
 }
 
 function showTransferLockMessage() {
-  alert('Transfers are locked while the matchday is active.');
+  const state = getFantasySubmissionState();
+  const limit = getMatchdayTransferLimit(fantasyMatchday);
+  const used = Number(state?.transfersUsed) || 0;
+  alert(state && Number(state.matchdayId) === Number(fantasyMatchday?.id)
+    ? `No transfers remaining. You have used ${used}/${limit} for this matchday.`
+    : 'Submit your squad before the matchday starts. Transfers are locked while it is active.');
+}
+
+function getMatchdayTransferLimit(matchday) {
+  if (!matchday || matchday.transferLimit === undefined) return 1;
+  return Math.max(0, Number(matchday.transferLimit) || 0);
+}
+
+function recordFantasyTransfer() {
+  if (!fantasyMatchday) return true;
+  const state = getFantasySubmissionState();
+  const transferLimit = getMatchdayTransferLimit(fantasyMatchday);
+  if (!state || Number(state.matchdayId) !== Number(fantasyMatchday.id) || Number(state.transfersUsed) >= transferLimit) {
+    showTransferLockMessage();
+    return false;
+  }
+  saveFantasySubmissionState({ ...state, transfersUsed: Number(state.transfersUsed) + 1 });
+  return true;
 }
 
 async function hashFantasyPassword(password) {
@@ -351,6 +384,35 @@ function initBuildPage() {
   renderBuildBoard();
 }
 
+function renderSquadSubmissionStatus() {
+  const status = document.getElementById('squad-submit-status');
+  const submitButton = document.getElementById('submitTeam');
+  if (!status) return;
+  const state = getFantasySubmissionState();
+  const upcoming = fantasyMatchdays.find((matchday) => matchday.status === 'draft');
+  const active = fantasyMatchday;
+  if (active) {
+    const limit = getMatchdayTransferLimit(active);
+    const used = Number(state?.transfersUsed) || 0;
+    const submitted = state && Number(state.matchdayId) === Number(active.id);
+    status.innerHTML = submitted
+      ? `<strong>Matchday ${active.id} squad submitted</strong><span>${Math.max(0, limit - used)} of ${limit} transfers remaining</span>`
+      : '<strong>Squad submission closed</strong><span>This matchday is already live.</span>';
+    if (submitButton) {
+      submitButton.disabled = !submitted;
+      submitButton.textContent = 'Save transfer';
+    }
+    return;
+  }
+  status.innerHTML = upcoming
+    ? `<strong>Next: Matchday ${upcoming.id} · ${upcoming.name}</strong><span>Submit your final squad before it starts.</span>`
+    : '<strong>Squad draft</strong><span>Build your team and submit it when a matchday is scheduled.</span>';
+  if (submitButton) {
+    submitButton.disabled = false;
+    submitButton.textContent = 'Submit squad';
+  }
+}
+
 function renderBuildMatchdays() {
   const container = document.getElementById('build-matchdays');
   if (!container) return;
@@ -371,17 +433,17 @@ function renderBuildMatchdays() {
         <p class="section-title">League calendar</p>
         <h2>Matchdays</h2>
       </div>
-      ${activeMatchday ? '<span class="matchday-lock">Transfers locked</span>' : '<span class="matchday-open">Transfers open</span>'}
+      ${activeMatchday ? `<span class="matchday-lock">${getMatchdayTransferLimit(activeMatchday)} transfers</span>` : '<span class="matchday-open">Transfers open</span>'}
     </div>
     <div class="matchday-list">
       ${matchdays.map((matchday) => `
         <div class="matchday-item ${matchday.status === 'active' ? 'is-active' : ''}">
-          <div><strong>MD${matchday.id}</strong><span>${matchday.name}</span></div>
+          <div><strong>MD${matchday.id}</strong><span>${matchday.name} · ${getMatchdayTransferLimit(matchday)} transfer${getMatchdayTransferLimit(matchday) === 1 ? '' : 's'}</span></div>
           <span class="matchday-status">${matchday.status === 'active' ? 'Live' : matchday.status === 'ended' ? 'Complete' : 'Upcoming'}</span>
         </div>
       `).join('')}
     </div>
-    ${activeMatchday ? '<p class="matchday-notice">Matchday is live. Your saved team cannot be changed until the matchday ends.</p>' : '<p class="matchday-notice">Transfers are open until the next matchday begins.</p>'}
+    ${activeMatchday ? `<p class="matchday-notice">Matchday is live. You can make ${getMatchdayTransferLimit(activeMatchday)} player transfer${getMatchdayTransferLimit(activeMatchday) === 1 ? '' : 's'} before the squad locks.</p>` : '<p class="matchday-notice">Transfers are open until the next matchday begins.</p>'}
   `;
 }
 
@@ -404,6 +466,8 @@ function renderBuildBoard() {
 
   if (!teamSummary) return;
 
+  renderSquadSubmissionStatus();
+
   const storedTeam = getStoredFantasyTeam();
   const team = Array.from({ length: FANTASY_TEAM_SIZE }, (_, index) => storedTeam[index] || null);
   const occupiedTeam = team.filter(Boolean);
@@ -425,16 +489,24 @@ function renderBuildBoard() {
   }
 
   const selectedPlayers = occupiedTeam.map((playerId) => getPlayerById(playerId)).filter(Boolean);
+  const captain = getStoredFantasyCaptain();
+  const viceCaptain = getStoredFantasyViceCaptain();
   if (selectedPlayers.length === 0) {
     teamSummary.innerHTML = '<p class="empty-state">Your squad is empty. Pick your five-man team from the list below.</p>';
   } else {
-    teamSummary.innerHTML = selectedPlayers.map((player, index) => `
+    teamSummary.innerHTML = selectedPlayers.map((player) => `
       <div class="selected-player">
         <div>
           <strong>${player.name}</strong>
-          <span class="player-role">${index < 4 ? 'Starter' : 'Sub'}</span>
+          <span class="player-role">${team.indexOf(player.id) < 4 ? 'Starter' : 'Sub'}</span>
+          ${captain === player.id ? '<span class="captain-badge">C</span>' : ''}
+          ${viceCaptain === player.id ? '<span class="vice-captain-badge">VC</span>' : ''}
         </div>
-        <div class="small-btn" onclick="removePlayerFromTeam('${player.id}')">Remove</div>
+        <div class="selected-player-actions">
+          ${team.indexOf(player.id) < 4 ? `<button class="small-btn captain-btn ${captain === player.id ? 'selected' : ''}" type="button" onclick="setFantasyCaptain('${player.id}')">${captain === player.id ? 'Captain' : 'Make captain'}</button>` : ''}
+          ${team.indexOf(player.id) < 4 ? `<button class="small-btn captain-btn ${viceCaptain === player.id ? 'selected' : ''}" type="button" onclick="setFantasyViceCaptain('${player.id}')">${viceCaptain === player.id ? 'Vice' : 'Make vice'}</button>` : ''}
+          <button class="small-btn" type="button" onclick="removePlayerFromTeam('${player.id}')">Remove</button>
+        </div>
       </div>
     `).join('');
   }
@@ -444,7 +516,7 @@ function renderBuildBoard() {
     const player = getPlayerById(team[slotIndex]);
     slot.innerHTML = player ? `
       <button class="shirt-player" type="button" onclick="removePlayerFromSlot(${slotIndex})" aria-label="Remove ${player.name}">
-        <span class="team-shirt" style="--shirt-color: ${player.teamColor || '#00f0ff'}"><span class="shirt-number">${slotIndex + 1}</span></span>
+        <span class="team-shirt" style="--shirt-color: ${player.teamColor || '#00f0ff'}"></span>
         <strong>${player.name}</strong>
         <small>${slotIndex === 4 ? 'Substitute' : 'Starter'}</small>
       </button>
@@ -465,7 +537,7 @@ function openPlayerPicker(slotIndex) {
   document.getElementById('player-picker-title').textContent = slotIndex === 4 ? 'Choose substitute' : `Choose starter ${slotIndex + 1}`;
   list.innerHTML = FANTASY_PLAYERS.filter((player) => !team.includes(player.id) || player.id === selected).map((player) => `
     <button class="picker-player" type="button" onclick="selectPlayerForSlot('${player.id}', ${slotIndex})">
-      <span class="team-shirt mini-shirt" style="--shirt-color: ${player.teamColor || '#00f0ff'}"><span class="shirt-number">${slotIndex + 1}</span></span>
+      <span class="team-shirt mini-shirt" style="--shirt-color: ${player.teamColor || '#00f0ff'}"></span>
       <span><strong>${player.name}</strong><small>${formatMoney(player.value)} · ${getPlayerFantasyPoints(player)} pts</small></span>
     </button>
   `).join('') || '<p class="empty-state">All players are already in your squad.</p>';
@@ -479,6 +551,7 @@ window.selectPlayerForSlot = function (playerId, slotIndex) {
     if (transfersAreLocked()) showTransferLockMessage();
     return;
   }
+  if (!recordFantasyTransfer()) return;
   const team = Array.from({ length: FANTASY_TEAM_SIZE }, (_, index) => getStoredFantasyTeam()[index] || null);
   const existingIndex = team.indexOf(playerId);
   if (existingIndex >= 0) team[existingIndex] = null;
@@ -494,9 +567,39 @@ window.selectPlayerForSlot = function (playerId, slotIndex) {
 
 window.removePlayerFromSlot = function (slotIndex) {
   if (!ensureFantasyLogin() || transfersAreLocked()) return;
+  if (!recordFantasyTransfer()) return;
   const team = Array.from({ length: FANTASY_TEAM_SIZE }, (_, index) => getStoredFantasyTeam()[index] || null);
+  const playerId = team[slotIndex];
   team[slotIndex] = null;
+  if (playerId === getStoredFantasyCaptain()) saveFantasyCaptain(null);
+  if (playerId === getStoredFantasyViceCaptain()) saveFantasyViceCaptain(null);
   saveFantasyTeam(team);
+  renderBuildBoard();
+};
+
+window.setFantasyCaptain = function (playerId) {
+  if (!ensureFantasyLogin()) return;
+  if (transfersAreLocked()) {
+    showTransferLockMessage();
+    return;
+  }
+  const team = getStoredFantasyTeam();
+  if (team.indexOf(playerId) > FANTASY_STARTER_COUNT - 1) return;
+  saveFantasyCaptain(getStoredFantasyCaptain() === playerId ? null : playerId);
+  if (getStoredFantasyCaptain() === getStoredFantasyViceCaptain()) saveFantasyViceCaptain(null);
+  renderBuildBoard();
+};
+
+window.setFantasyViceCaptain = function (playerId) {
+  if (!ensureFantasyLogin()) return;
+  if (transfersAreLocked()) {
+    showTransferLockMessage();
+    return;
+  }
+  const team = getStoredFantasyTeam();
+  if (team.indexOf(playerId) > FANTASY_STARTER_COUNT - 1) return;
+  saveFantasyViceCaptain(getStoredFantasyViceCaptain() === playerId ? null : playerId);
+  if (getStoredFantasyCaptain() === getStoredFantasyViceCaptain()) saveFantasyCaptain(null);
   renderBuildBoard();
 };
 
@@ -520,6 +623,8 @@ window.togglePlayerTeam = function (playerId) {
     return;
   }
 
+  if (!recordFantasyTransfer()) return;
+
   const nextTotal = getTeamTotal([...team, playerId]);
   if (nextTotal > FANTASY_TEAM_LIMIT) {
     alert('This selection would exceed the 40.0M budget.');
@@ -539,7 +644,10 @@ window.removePlayerFromTeam = function (playerId) {
     showTransferLockMessage();
     return;
   }
+  if (!recordFantasyTransfer()) return;
   const team = getStoredFantasyTeam().filter((id) => id !== playerId);
+  if (playerId === getStoredFantasyCaptain()) saveFantasyCaptain(null);
+  if (playerId === getStoredFantasyViceCaptain()) saveFantasyViceCaptain(null);
   saveFantasyTeam(team);
   renderBuildBoard();
 };
@@ -552,6 +660,7 @@ window.makeSubPlayer = function (event, playerId) {
     showTransferLockMessage();
     return;
   }
+  if (!recordFantasyTransfer()) return;
   event.preventDefault();
   const team = getStoredFantasyTeam();
   const list = team.filter((id) => id !== playerId);
@@ -570,8 +679,16 @@ window.saveFantasyTeamToStorage = async function () {
   if (!ensureFantasyLogin()) {
     return;
   }
-  if (transfersAreLocked()) {
-    showTransferLockMessage();
+  if (fantasyMatchday) {
+    const submission = getFantasySubmissionState();
+    if (!submission || Number(submission.matchdayId) !== Number(fantasyMatchday.id)) {
+      showTransferLockMessage();
+      return;
+    }
+  }
+  const targetMatchday = fantasyMatchday || fantasyMatchdays.find((matchday) => matchday.status === 'draft');
+  if (!targetMatchday) {
+    alert('There is no upcoming matchday to submit for yet.');
     return;
   }
   const team = getStoredFantasyTeam().filter(Boolean);
@@ -592,6 +709,16 @@ window.saveFantasyTeamToStorage = async function () {
     alert('Your squad must include 4 starters and 1 substitute.');
     return;
   }
+  const captain = getStoredFantasyCaptain();
+  const viceCaptain = getStoredFantasyViceCaptain();
+  if (!captain || team.slice(0, FANTASY_STARTER_COUNT).indexOf(captain) < 0) {
+    alert('Choose a captain from your four starters.');
+    return;
+  }
+  if (!viceCaptain || team.slice(0, FANTASY_STARTER_COUNT).indexOf(viceCaptain) < 0) {
+    alert('Choose a vice captain from your four starters.');
+    return;
+  }
   try {
     const user = getCurrentFantasyUser();
     const db = await getFantasyDb();
@@ -601,12 +728,31 @@ window.saveFantasyTeamToStorage = async function () {
       throw new Error('Your account could not be found. Please sign in again.');
     }
 
-    users[accountKey] = { ...users[accountKey], fantasyTeam: team };
+    const currentSubmission = getFantasySubmissionState();
+    const transfersUsed = currentSubmission && Number(currentSubmission.matchdayId) === Number(targetMatchday.id)
+      ? Number(currentSubmission.transfersUsed) || 0
+      : 0;
+    users[accountKey] = {
+      ...users[accountKey],
+      fantasyTeam: team,
+      fantasyCaptain: captain,
+      fantasyViceCaptain: viceCaptain,
+      fantasySubmittedMatchdayId: targetMatchday.id,
+      fantasyTransfersUsed: transfersUsed
+    };
     await saveFantasyDb({ ...db, users });
-    alert('Team saved successfully.');
+    saveFantasySubmissionState({ matchdayId: targetMatchday.id, transfersUsed });
+    renderSquadSubmissionStatus();
+    alert(fantasyMatchday ? 'Transfer saved.' : `Squad submitted for Matchday ${targetMatchday.id}.`);
   } catch (error) {
     alert(error.message || 'Unable to save your team. Please try again.');
   }
+};
+
+window.saveFantasyDraftToStorage = function () {
+  if (!ensureFantasyLogin()) return;
+  renderSquadSubmissionStatus();
+  alert('Draft saved on this device. Submit the squad before the matchday starts.');
 };
 
 async function renderLeaderboard() {
@@ -705,7 +851,7 @@ function openPlayerDetails(playerId) {
 
   content.innerHTML = `
     <div class="detail-hero" style="--shirt-color: ${player.teamColor || '#00f0ff'}">
-      <div class="detail-shirt team-shirt"><span class="shirt-number">${player.shirtNumber || '-'}</span></div>
+      <div class="detail-shirt team-shirt"></div>
       <div class="detail-identity">
         <p>${player.position || 'Player'}${player.team ? ` · ${player.team}` : ''}</p>
         <h2 id="player-detail-name">${name.first}<br><strong>${name.last}</strong></h2>
@@ -736,6 +882,8 @@ function renderAdminState() {
   const startButton = document.getElementById('admin-start-matchday');
   const endButton = document.getElementById('admin-end-matchday');
   const deleteButton = document.getElementById('admin-delete-matchday');
+  const settingsButton = document.getElementById('admin-save-matchday-settings');
+  const transferInput = document.getElementById('admin-transfer-limit');
   const selector = document.getElementById('admin-matchday-select');
   if (!status) return;
 
@@ -752,13 +900,16 @@ function renderAdminState() {
     if (startButton) startButton.disabled = true;
     if (endButton) endButton.disabled = true;
     if (deleteButton) deleteButton.disabled = true;
+    if (settingsButton) settingsButton.disabled = true;
     return;
   }
 
   status.textContent = `Matchday ${selected.id}: ${selected.name} (${selected.status})`;
+  if (transferInput) transferInput.value = getMatchdayTransferLimit(selected);
   if (startButton) startButton.disabled = selected.status !== 'draft';
   if (endButton) endButton.disabled = selected.status !== 'active';
   if (deleteButton) deleteButton.disabled = selected.status === 'active';
+  if (settingsButton) settingsButton.disabled = selected.status === 'ended';
 }
 
 function renderAdminPlayers() {
@@ -793,6 +944,7 @@ async function createFantasyMatchday() {
   const matchday = {
     id: fantasyMatchdays.reduce((highest, current) => Math.max(highest, Number(current.id) || 0), 0) + 1,
     name,
+    transferLimit: Math.max(0, Number(document.getElementById('admin-transfer-limit')?.value) || 0),
     status: 'draft',
     createdAt: new Date().toISOString()
   };
@@ -858,6 +1010,17 @@ async function deleteFantasyMatchday() {
   renderAdminPlayers();
 }
 
+async function saveFantasyMatchdaySettings() {
+  const selected = fantasyMatchdays.find((matchday) => String(matchday.id) === String(selectedFantasyMatchdayId));
+  if (!isFantasyAdmin() || !selected || selected.status === 'ended') return;
+  const transferLimit = Math.max(0, Number(document.getElementById('admin-transfer-limit').value) || 0);
+  const db = await getFantasyDb();
+  fantasyMatchdays = fantasyMatchdays.map((matchday) => matchday.id === selected.id ? { ...matchday, transferLimit } : matchday);
+  await saveFantasyDb({ ...db, fantasyMatchdays });
+  renderAdminState();
+  alert('Matchday settings saved.');
+}
+
 async function saveFantasyPlayerStats() {
   if (!isFantasyAdmin()) return;
   const selected = fantasyMatchdays.find((matchday) => String(matchday.id) === String(selectedFantasyMatchdayId));
@@ -907,6 +1070,7 @@ function initAdminPage() {
     saveSelectedMatchdayId(selectedFantasyMatchdayId).catch((error) => alert(error.message));
   });
   document.getElementById('admin-create-matchday')?.addEventListener('click', () => createFantasyMatchday().catch((error) => alert(error.message)));
+  document.getElementById('admin-save-matchday-settings')?.addEventListener('click', () => saveFantasyMatchdaySettings().catch((error) => alert(error.message)));
   document.getElementById('admin-start-matchday')?.addEventListener('click', () => startFantasyMatchday().catch((error) => alert(error.message)));
   document.getElementById('admin-end-matchday')?.addEventListener('click', () => endFantasyMatchday().catch((error) => alert(error.message)));
   document.getElementById('admin-delete-matchday')?.addEventListener('click', () => deleteFantasyMatchday().catch((error) => alert(error.message)));

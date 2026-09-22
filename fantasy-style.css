@@ -781,6 +781,26 @@ h1 span {
   margin-bottom: 10px;
 }
 
+.squad-submit-status {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 10px;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(255,255,255,0.03);
+}
+
+.squad-submit-status strong { font-size: 0.82rem; }
+.squad-submit-status span { color: var(--muted); font-size: 0.75rem; }
+
+.squad-submit-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.squad-submit-actions button { flex: 1; }
+
 .selected-list {
   display: flex;
   flex-direction: column;
@@ -802,6 +822,47 @@ h1 span {
 .selected-player strong {
   display: block;
   margin-bottom: 2px;
+}
+
+.selected-player-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.captain-btn {
+  padding: 6px 8px;
+  font-size: 0.68rem;
+}
+
+.captain-btn.selected {
+  border-color: rgba(255,209,102,0.55);
+  background: rgba(255,209,102,0.12);
+  color: var(--gold);
+}
+
+.captain-badge,
+.vice-captain-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  margin-left: 5px;
+  border-radius: 5px;
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.captain-badge {
+  background: var(--gold);
+  color: #241500;
+}
+
+.vice-captain-badge {
+  background: rgba(255,255,255,0.18);
+  color: var(--text);
 }
 
 .player-role {
@@ -968,10 +1029,10 @@ tr:last-child td {
   display: flex;
   align-items: center;
   gap: 22px;
-  min-height: 150px;
+  min-height: 170px;
   padding: 26px 26px 20px;
-  background: #9147ef;
-  background: linear-gradient(125deg, color-mix(in srgb, var(--shirt-color) 75%, #24112f), #9147ef);
+  background: linear-gradient(125deg, rgba(13, 6, 24, 0.35), rgba(145, 71, 239, 0.92));
+  overflow: hidden;
 }
 
 .detail-shirt {
@@ -983,19 +1044,20 @@ tr:last-child td {
 
 .detail-identity p {
   margin: 0 0 5px;
-  color: rgba(5,1,15,0.72);
+  color: rgba(255,255,255,0.72);
   font-size: 0.8rem;
 }
 
 .detail-identity h2 {
   margin: 0;
-  color: #16051b;
+  color: #fff;
   font-size: 1.45rem;
   line-height: 1.05;
+  text-shadow: 0 2px 12px rgba(0,0,0,0.3);
 }
 
 .detail-identity h2 strong { font-size: 1.8rem; }
-.detail-identity > span { display: block; margin-top: 8px; color: rgba(5,1,15,0.75); }
+.detail-identity > span { display: block; margin-top: 8px; color: rgba(255,255,255,0.82); }
 
 .detail-actions {
   display: flex;
@@ -1049,7 +1111,8 @@ tr:last-child td {
 
 .points-strip { display: flex; gap: 8px; }
 .points-strip span { display: grid; place-items: center; min-width: 40px; min-height: 34px; border-radius: 8px; background: rgba(255,255,255,0.1); font-weight: 700; }
-.detail-empty { margin: 0; color: var(--muted); font-size: 0.82rem; }
+.points-strip .detail-empty { display: block; min-width: 0; min-height: 0; padding: 0; border-radius: 0; background: none; font-weight: 400; }
+.detail-empty { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: 0.82rem; }
 
 .fixture-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
 .fixture-card { display: grid; gap: 4px; justify-items: center; padding: 8px 4px; border-radius: 8px; background: rgba(255,255,255,0.06); text-align: center; }

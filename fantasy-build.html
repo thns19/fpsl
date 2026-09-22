@@ -89,10 +89,14 @@
 
       <aside class="summary-card">
         <h3>Selected Squad</h3>
-        <p class="summary-copy">Choose four starters on court and one substitute on the bench.</p>
+        <p class="summary-copy">Choose four starters and one substitute. Set one captain for double points and one vice captain.</p>
         <div id="teamSummary" class="selected-list"></div>
         <div style="margin-top: 18px;">
-          <button id="saveTeam" class="primary-btn" type="button" onclick="saveFantasyTeamToStorage()">Save Team</button>
+          <div id="squad-submit-status" class="squad-submit-status"></div>
+          <div class="squad-submit-actions">
+            <button id="saveTeam" class="secondary-btn" type="button" onclick="saveFantasyDraftToStorage()">Save draft</button>
+            <button id="submitTeam" class="primary-btn" type="button" onclick="saveFantasyTeamToStorage()">Submit squad</button>
+          </div>
         </div>
       </aside>
     </section>
