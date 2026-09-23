@@ -27,6 +27,7 @@ let fantasyMatchday = null;
 let fantasyMatchdays = [];
 let selectedFantasyMatchdayId = null;
 let viewedFantasyMatchdayId = null;
+let fantasyAccount = null;
 
 async function getFantasyDb() {
   if (fantasyDbCache) return fantasyDbCache;
@@ -52,6 +53,15 @@ async function loadFantasyState() {
     }
     const currentUser = getCurrentFantasyUser();
     const account = currentUser ? db.users?.[currentUser.username.toLowerCase()] : null;
+    fantasyAccount = account || null;
+    if (account && Array.isArray(account.fantasyTeam)) {
+      const budgetState = getFantasyBudgetState(account, account.fantasyTeam);
+      if (budgetState.changed) {
+        fantasyAccount = { ...account, fantasyBudget: budgetState.budget, fantasyPriceSnapshot: budgetState.snapshot };
+        db = { ...db, users: { ...(db.users || {}), [currentUser.username.toLowerCase()]: fantasyAccount } };
+        await saveFantasyDb(db);
+      }
+    }
     if (account?.fantasyCaptain && !getStoredFantasyCaptain()) saveFantasyCaptain(account.fantasyCaptain);
     if (account?.fantasySubmittedMatchdayId && !getFantasySubmissionState()) {
       saveFantasySubmissionState({ matchdayId: account.fantasySubmittedMatchdayId, transfersUsed: Number(account.fantasyTransfersUsed) || 0 });
@@ -60,12 +70,15 @@ async function loadFantasyState() {
   } catch (error) {
     fantasyMatchday = null;
     fantasyMatchdays = [];
+    fantasyAccount = null;
   }
 }
 
 function applyAggregatedPlayerStats(matchdays) {
   const totals = {};
-  matchdays.forEach((matchday) => {
+  matchdays
+    .filter((matchday) => matchday.status === 'ended' || matchday.status === 'active')
+    .forEach((matchday) => {
     Object.entries(matchday.playerStats || {}).forEach(([playerId, stats]) => {
       const total = totals[playerId] || { goals: 0, ownGoals: 0, mvps: 0, points: [] };
       total.goals += Number(stats.goals) || 0;
@@ -93,10 +106,13 @@ function recalculateManagerTotals(users, matchdays) {
     if (!Array.isArray(user.fantasyTeam)) return;
     const fantasyPoints = matchdays
       .filter((matchday) => matchday.status === 'ended')
-      .reduce((total, matchday) => total + user.fantasyTeam.reduce((teamTotal, playerId) => {
-        const points = Number(matchday.playerStats?.[playerId]?.matchdayPoints) || 0;
-        return teamTotal + points * (playerId === user.fantasyCaptain ? 2 : 1);
-      }, 0), 0);
+      .reduce((total, matchday) => {
+        const savedPoints = user.fantasyMatchdayPoints?.[matchday.id];
+        const points = savedPoints === undefined
+          ? calculateFantasyTeamPoints(user.fantasyTeam, user.fantasyCaptain, matchday)
+          : Number(savedPoints) || 0;
+        return total + points;
+      }, 0);
     const lastMatchday = getOrderedFantasyMatchdays().filter((matchday) => matchday.status === 'ended').at(-1);
     users[accountKey] = {
       ...user,
@@ -104,6 +120,27 @@ function recalculateManagerTotals(users, matchdays) {
       matchday: lastMatchday?.id || 0
     };
   });
+}
+
+function calculateFantasyTeamPoints(team, captain, matchday) {
+  const players = Array.isArray(team) ? team.filter(Boolean) : [];
+  const starters = players.slice(0, FANTASY_STARTER_COUNT);
+  const substitute = players[FANTASY_STARTER_COUNT];
+  const starterPoints = starters.map((playerId) => ({
+    playerId,
+    points: Number(matchday?.playerStats?.[playerId]?.matchdayPoints) || 0
+  }));
+  const lowestStarter = starterPoints.reduce((lowest, player) => player.points < lowest.points ? player : lowest, starterPoints[0]);
+  const scoringPlayers = starterPoints.slice();
+
+  if (matchday?.status === 'ended' && substitute && lowestStarter && lowestStarter.points <= 0) {
+    scoringPlayers.splice(scoringPlayers.indexOf(lowestStarter), 1, {
+      playerId: substitute,
+      points: Number(matchday.playerStats?.[substitute]?.matchdayPoints) || 0
+    });
+  }
+
+  return scoringPlayers.reduce((total, player) => total + player.points * (player.playerId === captain ? 2 : 1), 0);
 }
 
 async function saveFantasyDb(db) {
@@ -135,8 +172,14 @@ function isFantasyAdmin() {
 function transfersAreLocked() {
   if (!fantasyMatchday) return false;
   const state = getFantasySubmissionState();
+  if (!state || Number(state.matchdayId) !== Number(fantasyMatchday.id)) return false;
   const transferLimit = getMatchdayTransferLimit(fantasyMatchday);
-  return !state || Number(state.matchdayId) !== Number(fantasyMatchday.id) || Number(state.transfersUsed) >= transferLimit;
+  return Number(state.transfersUsed) >= transferLimit;
+}
+
+function hasActiveMatchdaySubmission() {
+  const state = getFantasySubmissionState();
+  return Boolean(fantasyMatchday && state && Number(state.matchdayId) === Number(fantasyMatchday.id));
 }
 
 function showTransferLockMessage() {
@@ -151,6 +194,40 @@ function showTransferLockMessage() {
 function getMatchdayTransferLimit(matchday) {
   if (!matchday || matchday.transferLimit === undefined) return 1;
   return Math.max(0, Number(matchday.transferLimit) || 0);
+}
+
+function getFantasyBudgetState(account, team) {
+  const snapshot = { ...(account?.fantasyPriceSnapshot || {}) };
+  const baseBudget = Number(account?.fantasyBudget) || FANTASY_TEAM_LIMIT;
+  let budget = baseBudget;
+  let changed = !account?.fantasyPriceSnapshot;
+  (team || []).filter(Boolean).forEach((playerId) => {
+    const player = getPlayerById(playerId);
+    if (!player) return;
+    const currentValue = Number(player.value) || 0;
+    if (snapshot[playerId] === undefined) {
+      snapshot[playerId] = currentValue;
+      changed = true;
+      return;
+    }
+    const difference = currentValue - Number(snapshot[playerId]);
+    if (difference !== 0) {
+      budget += difference;
+      snapshot[playerId] = currentValue;
+      changed = true;
+    }
+  });
+  Object.keys(snapshot).forEach((playerId) => {
+    if (!(team || []).includes(playerId)) {
+      delete snapshot[playerId];
+      changed = true;
+    }
+  });
+  return { budget, snapshot, changed };
+}
+
+function getCurrentFantasyBudget(team) {
+  return getFantasyBudgetState(fantasyAccount, team).budget;
 }
 
 function getOrderedFantasyMatchdays() {
@@ -170,6 +247,16 @@ function recordFantasyTransfer() {
   }
   saveFantasySubmissionState({ ...state, transfersUsed: Number(state.transfersUsed) + 1 });
   return true;
+}
+
+function saveActiveFantasyTransfer() {
+  if (hasActiveMatchdaySubmission()) {
+    saveFantasyTeamToStorage().catch((error) => alert(error.message));
+  }
+}
+
+function showLiveTransferInstructions() {
+  alert('During a live matchday, replace one player directly from their squad slot.');
 }
 
 async function hashFantasyPassword(password) {
@@ -404,16 +491,18 @@ function renderSquadSubmissionStatus() {
     const used = Number(state?.transfersUsed) || 0;
     const submitted = state && Number(state.matchdayId) === Number(active.id);
     status.innerHTML = submitted
-      ? `<strong>Matchday ${active.id} squad submitted</strong><span>${Math.max(0, limit - used)} of ${limit} transfers remaining</span>`
-      : '<strong>Squad submission closed</strong><span>This matchday is already live.</span>';
+      ? `<strong>${active.name} squad submitted</strong><span>${Math.max(0, limit - used)} of ${limit} transfers remaining</span>`
+      : upcoming
+        ? `<strong>Next: ${upcoming.name}</strong><span>Build your squad now and submit it before the next matchday starts.</span>`
+        : '<strong>Squad draft</strong><span>Build your team while the current matchday is live.</span>';
     if (submitButton) {
-      submitButton.disabled = !submitted;
-      submitButton.textContent = 'Save transfer';
+      submitButton.disabled = false;
+      submitButton.textContent = submitted ? 'Save transfer' : 'Submit squad';
     }
     return;
   }
   status.innerHTML = upcoming
-    ? `<strong>Next: Matchday ${upcoming.id} · ${upcoming.name}</strong><span>Submit your final squad before it starts.</span>`
+    ? `<strong>Next: ${upcoming.name}</strong><span>Submit your final squad before it starts.</span>`
     : '<strong>Squad draft</strong><span>Build your team and submit it when a matchday is scheduled.</span>';
   if (submitButton) {
     submitButton.disabled = false;
@@ -443,13 +532,13 @@ function renderBuildMatchdays() {
     </div>
     <label class="matchday-view-select">Viewing matchday
       <select id="build-matchday-select">
-        ${matchdays.map((matchday) => `<option value="${matchday.id}" ${String(matchday.id) === String(viewedFantasyMatchdayId) ? 'selected' : ''}>Matchday ${matchday.id}: ${matchday.name}</option>`).join('')}
+        ${matchdays.map((matchday) => `<option value="${matchday.id}" ${String(matchday.id) === String(viewedFantasyMatchdayId) ? 'selected' : ''}>${matchday.name}</option>`).join('')}
       </select>
     </label>
     <div class="matchday-list">
       ${matchdays.map((matchday) => `
         <div class="matchday-item ${matchday.status === 'active' ? 'is-active' : ''} ${String(matchday.id) === String(viewedFantasyMatchdayId) ? 'is-viewed' : ''}" aria-current="${String(matchday.id) === String(viewedFantasyMatchdayId) ? 'true' : 'false'}">
-          <div><strong>MD${matchday.id}</strong><span>${matchday.name} · ${getMatchdayTransferLimit(matchday)} transfer${getMatchdayTransferLimit(matchday) === 1 ? '' : 's'}</span></div>
+          <div><strong>${matchday.name}</strong><span>${getMatchdayTransferLimit(matchday)} transfer${getMatchdayTransferLimit(matchday) === 1 ? '' : 's'}</span></div>
           <span class="matchday-status">${matchday.status === 'active' ? 'Live' : matchday.status === 'ended' ? 'Complete' : 'Upcoming'}</span>
         </div>
       `).join('')}
@@ -459,6 +548,7 @@ function renderBuildMatchdays() {
   document.getElementById('build-matchday-select')?.addEventListener('change', (event) => {
     viewedFantasyMatchdayId = Number(event.target.value) || null;
     renderBuildMatchdays();
+    renderBuildBoard();
   });
 }
 
@@ -476,6 +566,8 @@ function ensureFantasyLogin() {
 function renderBuildBoard() {
   const teamSummary = document.getElementById('teamSummary');
   const teamTotalLabel = document.getElementById('teamTotal');
+  const teamPointsLabel = document.getElementById('teamPoints');
+  const teamPointsMatchdayLabel = document.getElementById('teamPointsMatchday');
   const teamCountLabel = document.getElementById('teamCount');
   const budgetBar = document.getElementById('budgetBar');
 
@@ -487,8 +579,22 @@ function renderBuildBoard() {
   const team = Array.from({ length: FANTASY_TEAM_SIZE }, (_, index) => storedTeam[index] || null);
   const occupiedTeam = team.filter(Boolean);
   const total = getTeamTotal(occupiedTeam);
-  const remaining = FANTASY_TEAM_LIMIT - total;
+  const budget = getCurrentFantasyBudget(occupiedTeam);
+  const remaining = budget - total;
+  const viewedMatchday = fantasyMatchdays.find((matchday) => String(matchday.id) === String(viewedFantasyMatchdayId));
+  const pointsTeam = fantasyAccount?.fantasyTeam?.length === FANTASY_TEAM_SIZE ? fantasyAccount.fantasyTeam : occupiedTeam;
+  const pointsCaptain = fantasyAccount?.fantasyCaptain || getStoredFantasyCaptain();
+  const storedMatchdayPoints = viewedMatchday && fantasyAccount?.fantasyMatchdayPoints?.[viewedMatchday.id];
+  const teamPoints = viewedMatchday
+    ? storedMatchdayPoints !== undefined
+      ? Number(storedMatchdayPoints) || 0
+      : calculateFantasyTeamPoints(pointsTeam, pointsCaptain, viewedMatchday)
+    : 0;
 
+  const userBudgetLabel = document.getElementById('userBudget');
+  const budgetLimitLabel = document.getElementById('budgetLimitLabel');
+  if (userBudgetLabel) userBudgetLabel.textContent = formatMoney(budget);
+  if (budgetLimitLabel) budgetLimitLabel.textContent = `Available / ${formatMoney(budget)}`;
   if (teamTotalLabel) {
     teamTotalLabel.textContent = formatMoney(total);
     teamTotalLabel.className = remaining >= 0 ? 'budget-value under' : 'budget-value over';
@@ -498,8 +604,11 @@ function renderBuildBoard() {
     teamCountLabel.textContent = `${occupiedTeam.length}/${FANTASY_TEAM_SIZE}`;
   }
 
+  if (teamPointsLabel) teamPointsLabel.textContent = `${teamPoints} pts`;
+  if (teamPointsMatchdayLabel) teamPointsMatchdayLabel.textContent = viewedMatchday?.name || 'No matchday selected';
+
   if (budgetBar) {
-    const usage = Math.min((total / FANTASY_TEAM_LIMIT) * 100, 100);
+    const usage = budget > 0 ? Math.min((total / budget) * 100, 100) : 100;
     budgetBar.style.width = `${usage}%`;
   }
 
@@ -510,6 +619,7 @@ function renderBuildBoard() {
   } else {
     teamSummary.innerHTML = selectedPlayers.map((player) => `
       <div class="selected-player">
+        ${player.team ? `<span class="team-avatar"><img src="${getTeamLogoPath(player.team)}" alt="" loading="lazy" onerror="this.remove()"></span>` : ''}
         <div>
           <strong>${player.name}</strong>
           <span class="player-role">${team.indexOf(player.id) < 4 ? 'Starter' : 'Substitute'} · ${player.team || 'Team unknown'} · ${getPlayerFantasyPoints(player)} pts</span>
@@ -565,22 +675,29 @@ window.selectPlayerForSlot = function (playerId, slotIndex) {
     if (transfersAreLocked()) showTransferLockMessage();
     return;
   }
-  if (!recordFantasyTransfer()) return;
   const team = Array.from({ length: FANTASY_TEAM_SIZE }, (_, index) => getStoredFantasyTeam()[index] || null);
+  if (team[slotIndex] === playerId) return;
   const existingIndex = team.indexOf(playerId);
   if (existingIndex >= 0) team[existingIndex] = null;
   team[slotIndex] = playerId;
-  if (getTeamTotal(team.filter(Boolean)) > FANTASY_TEAM_LIMIT) {
+  if (team.filter(Boolean).length !== FANTASY_TEAM_SIZE) return;
+  if (getTeamTotal(team.filter(Boolean)) > getCurrentFantasyBudget(team.filter(Boolean))) {
     alert('This selection would exceed the 40.0M budget.');
     return;
   }
+  if (!recordFantasyTransfer()) return;
   saveFantasyTeam(team);
   document.getElementById('player-picker').hidden = true;
   renderBuildBoard();
+  saveActiveFantasyTransfer();
 };
 
 window.removePlayerFromSlot = function (slotIndex) {
   if (!ensureFantasyLogin() || transfersAreLocked()) return;
+  if (hasActiveMatchdaySubmission()) {
+    showLiveTransferInstructions();
+    return;
+  }
   if (!recordFantasyTransfer()) return;
   const team = Array.from({ length: FANTASY_TEAM_SIZE }, (_, index) => getStoredFantasyTeam()[index] || null);
   const playerId = team[slotIndex];
@@ -613,6 +730,10 @@ window.togglePlayerTeam = function (playerId) {
 
   const team = getStoredFantasyTeam();
   if (team.includes(playerId)) {
+    if (hasActiveMatchdaySubmission()) {
+      showLiveTransferInstructions();
+      return;
+    }
     removePlayerFromTeam(playerId);
     return;
   }
@@ -622,17 +743,17 @@ window.togglePlayerTeam = function (playerId) {
     return;
   }
 
-  if (!recordFantasyTransfer()) return;
-
   const nextTotal = getTeamTotal([...team, playerId]);
-  if (nextTotal > FANTASY_TEAM_LIMIT) {
+  if (nextTotal > getCurrentFantasyBudget(team)) {
     alert('This selection would exceed the 40.0M budget.');
     return;
   }
+  if (!recordFantasyTransfer()) return;
 
   team.push(playerId);
   saveFantasyTeam(team);
   renderBuildBoard();
+  saveActiveFantasyTransfer();
 };
 
 window.removePlayerFromTeam = function (playerId) {
@@ -641,6 +762,10 @@ window.removePlayerFromTeam = function (playerId) {
   }
   if (transfersAreLocked()) {
     showTransferLockMessage();
+    return;
+  }
+  if (hasActiveMatchdaySubmission()) {
+    showLiveTransferInstructions();
     return;
   }
   if (!recordFantasyTransfer()) return;
@@ -671,20 +796,21 @@ window.makeSubPlayer = function (event, playerId) {
   }
   saveFantasyTeam(list);
   renderBuildBoard();
+  saveActiveFantasyTransfer();
 };
 
 window.saveFantasyTeamToStorage = async function () {
   if (!ensureFantasyLogin()) {
     return;
   }
-  if (fantasyMatchday) {
-    const submission = getFantasySubmissionState();
-    if (!submission || Number(submission.matchdayId) !== Number(fantasyMatchday.id)) {
-      showTransferLockMessage();
-      return;
-    }
+  const isActiveSubmission = hasActiveMatchdaySubmission();
+  if (isActiveSubmission && transfersAreLocked()) {
+    showTransferLockMessage();
+    return;
   }
-  const targetMatchday = fantasyMatchday || fantasyMatchdays.find((matchday) => matchday.status === 'draft');
+  const targetMatchday = isActiveSubmission
+    ? fantasyMatchday
+    : fantasyMatchdays.find((matchday) => matchday.status === 'draft');
   if (!targetMatchday) {
     alert('There is no upcoming matchday to submit for yet.');
     return;
@@ -698,8 +824,9 @@ window.saveFantasyTeamToStorage = async function () {
     alert('Your squad cannot exceed 5 players.');
     return;
   }
-  if (getTeamTotal(team) > FANTASY_TEAM_LIMIT) {
-    alert('Your squad exceeds the 40.0M budget.');
+  const budget = getCurrentFantasyBudget(team);
+  if (getTeamTotal(team) > budget) {
+    alert(`Your squad exceeds your ${formatMoney(budget)} budget.`);
     return;
   }
   const starterCount = team.slice(0, FANTASY_STARTER_COUNT).length;
@@ -729,13 +856,16 @@ window.saveFantasyTeamToStorage = async function () {
       ...users[accountKey],
       fantasyTeam: team,
       fantasyCaptain: captain,
+      fantasyBudget: getFantasyBudgetState(users[accountKey], team).budget,
+      fantasyPriceSnapshot: Object.fromEntries(team.map((playerId) => [playerId, Number(getPlayerById(playerId)?.value) || 0])),
       fantasySubmittedMatchdayId: targetMatchday.id,
       fantasyTransfersUsed: transfersUsed
     };
+    fantasyAccount = users[accountKey];
     await saveFantasyDb({ ...db, users });
     saveFantasySubmissionState({ matchdayId: targetMatchday.id, transfersUsed });
     renderSquadSubmissionStatus();
-    alert(fantasyMatchday ? 'Transfer saved.' : `Squad submitted for Matchday ${targetMatchday.id}.`);
+    alert(isActiveSubmission ? 'Transfer saved.' : `Squad submitted for ${targetMatchday.name}.`);
   } catch (error) {
     alert(error.message || 'Unable to save your team. Please try again.');
   }
@@ -755,13 +885,29 @@ async function renderLeaderboard() {
   try {
     const currentUser = getCurrentFantasyUser();
     const db = await getFantasyDb();
+    const orderedMatchdays = getOrderedFantasyMatchdays();
+    const matchdayForLastPoints = orderedMatchdays.find((matchday) => matchday.status === 'active')
+      || orderedMatchdays.filter((matchday) => matchday.status === 'ended').at(-1);
     const rows = Object.values(db.users || {})
       .filter((user) => Array.isArray(user.fantasyTeam) && user.fantasyTeam.length === FANTASY_TEAM_SIZE)
-      .map((user) => ({
-        username: user.username,
-        total: Number(user.fantasyPoints) || 0,
-        matchday: Number(user.matchday) || 0
-      }))
+      .map((user) => {
+        const savedPoints = user.fantasyMatchdayPoints || {};
+        const total = orderedMatchdays
+          .filter((matchday) => matchday.status === 'ended' || matchday.status === 'active')
+          .reduce((sum, matchday) => sum + (savedPoints[matchday.id] === undefined
+            ? calculateFantasyTeamPoints(user.fantasyTeam, user.fantasyCaptain, matchday)
+            : Number(savedPoints[matchday.id]) || 0), 0);
+        const lastPoints = matchdayForLastPoints
+          ? savedPoints[matchdayForLastPoints.id] === undefined
+            ? calculateFantasyTeamPoints(user.fantasyTeam, user.fantasyCaptain, matchdayForLastPoints)
+            : Number(savedPoints[matchdayForLastPoints.id]) || 0
+          : 0;
+        return {
+          username: user.username,
+          total,
+          lastPoints
+        };
+      })
       .sort((a, b) => b.total - a.total);
 
     table.innerHTML = `
@@ -769,7 +915,7 @@ async function renderLeaderboard() {
         <tr>
           <th>Rank</th>
           <th>Manager</th>
-          <th>Matchday</th>
+          <th>Last MD Points</th>
           <th>Total</th>
         </tr>
       </thead>
@@ -778,7 +924,7 @@ async function renderLeaderboard() {
           <tr>
             <td>#${index + 1}</td>
             <td>${entry.username}${currentUser && entry.username === currentUser.username ? ' (You)' : ''}</td>
-            <td>${entry.matchday}</td>
+            <td>${entry.lastPoints}</td>
             <td>${entry.total}</td>
           </tr>
         `).join('')}
@@ -797,6 +943,7 @@ function renderPlayersTable() {
     <thead>
       <tr>
         <th>Player</th>
+          <th>Team</th>
         <th>Value</th>
         <th>Form</th>
         <th>Goals</th>
@@ -809,6 +956,7 @@ function renderPlayersTable() {
       ${FANTASY_PLAYERS.map((player) => `
         <tr class="player-table-row" onclick="openPlayerDetails('${player.id}')" tabindex="0" onkeydown="if(event.key === 'Enter' || event.key === ' ') openPlayerDetails('${player.id}')">
           <td>${player.name}</td>
+          <td><span class="table-team"><img src="${getTeamLogoPath(player.team)}" alt="" loading="lazy" onerror="this.remove()">${player.team || 'Unknown team'}</span></td>
           <td>${formatMoney(player.value)}</td>
           <td>${formatPlayerForm(player)}</td>
           <td>${player.goals}</td>
@@ -834,16 +982,20 @@ function openPlayerDetails(playerId) {
   if (!player || !overlay || !content) return;
 
   const name = formatPlayerName(player);
-  const fixtures = Array.isArray(player.fixtures) ? player.fixtures : [];
+  const fixtures = getFantasyPlayerFixtures(player);
   const recentPoints = getPlayerMatchPoints(player).slice(-5);
   const trend = recentPoints.length ? recentPoints.map((points) => `<span>${points}</span>`).join('') : '<span class="detail-empty">No matchday points yet</span>';
   const fixtureMarkup = fixtures.length
-    ? fixtures.slice(0, 6).map((fixture) => `<div class="fixture-card"><small>${fixture.gameweek || 'Next'}</small><strong>${fixture.opponent || 'TBC'}</strong><span>${fixture.home ? 'H' : 'A'}</span></div>`).join('')
+    ? fixtures.slice(0, 6).map((fixture) => `<div class="fixture-card"><small>${fixture.gameweek || 'Next'}</small><div class="fixture-teams"><span><img src="${getTeamLogoPath(player.team)}" alt="" loading="lazy" onerror="this.remove()">${player.team || 'TBC'}</span><b>vs</b><span><img src="${getTeamLogoPath(fixture.opponent)}" alt="" loading="lazy" onerror="this.remove()">${fixture.opponent || 'TBC'}</span></div></div>`).join('')
     : '<p class="detail-empty">Fixtures will appear when matchday schedules are added.</p>';
+  const photoPath = getPlayerPhotoPath(player);
 
   content.innerHTML = `
     <div class="detail-hero" style="--shirt-color: ${player.teamColor || '#00f0ff'}">
-      <div class="detail-shirt team-shirt"></div>
+      <div class="detail-player-visual">
+        ${photoPath ? `<img class="detail-player-photo" src="${photoPath}" alt="${player.name}" loading="lazy">` : ''}
+        <div class="detail-shirt team-shirt"></div>
+      </div>
       <div class="detail-identity">
         <p>${player.position || 'Player'}${player.team ? ` · ${player.team}` : ''}</p>
         <h2 id="player-detail-name">${name.first}<br><strong>${name.last}</strong></h2>
@@ -854,7 +1006,7 @@ function openPlayerDetails(playerId) {
       <a class="primary-btn" href="fantasy-build.html">Add to squad <span aria-hidden="true">&nearr;</span></a>
       <button class="secondary-btn" type="button" onclick="document.getElementById('player-detail-overlay').hidden = true">Close</button>
     </div>
-    <div class="detail-price-line"><span>Price</span><strong>${formatMoney(player.value)}</strong><em>${player.priceTrend || 'Price stable'}</em></div>
+    <div class="detail-price-line"><span>Price</span><strong>${formatMoney(player.value)}</strong><em>${getPlayerPriceStatus(player)}</em></div>
     <div class="detail-metrics">
       <div><small>Form</small><strong>${formatPlayerForm(player)}</strong></div>
       <div><small>Pts / Match</small><strong>${recentPoints.length ? (getPlayerFantasyPoints(player) / recentPoints.length).toFixed(1) : '0.0'}</strong></div>
@@ -873,18 +1025,18 @@ function renderAdminState() {
   const status = document.getElementById('admin-matchday-status');
   const startButton = document.getElementById('admin-start-matchday');
   const endButton = document.getElementById('admin-end-matchday');
+  const cancelStartButton = document.getElementById('admin-cancel-start-matchday');
   const deleteButton = document.getElementById('admin-delete-matchday');
   const settingsButton = document.getElementById('admin-save-matchday-settings');
-  const moveUpButton = document.getElementById('admin-move-matchday-up');
-  const moveDownButton = document.getElementById('admin-move-matchday-down');
   const transferInput = document.getElementById('admin-transfer-limit');
   const selector = document.getElementById('admin-matchday-select');
+  const orderMenu = document.getElementById('admin-matchday-order');
   if (!status) return;
 
   if (selector) {
     selector.innerHTML = fantasyMatchdays.length === 0
       ? '<option value="">No matchdays created</option>'
-      : getOrderedFantasyMatchdays().map((matchday) => `<option value="${matchday.id}">Matchday ${matchday.id}: ${matchday.name} (${matchday.status})</option>`).join('');
+      : getOrderedFantasyMatchdays().map((matchday) => `<option value="${matchday.id}">${matchday.name} (${matchday.status})</option>`).join('');
     selector.value = selectedFantasyMatchdayId || '';
   }
 
@@ -893,23 +1045,52 @@ function renderAdminState() {
     status.textContent = 'No matchday created';
     if (startButton) startButton.disabled = true;
     if (endButton) endButton.disabled = true;
+    if (cancelStartButton) cancelStartButton.disabled = true;
     if (deleteButton) deleteButton.disabled = true;
     if (settingsButton) settingsButton.disabled = true;
-    if (moveUpButton) moveUpButton.disabled = true;
-    if (moveDownButton) moveDownButton.disabled = true;
+    if (orderMenu) orderMenu.innerHTML = '<p class="order-menu-empty">Create matchdays to set their season order.</p>';
     return;
   }
 
-  status.textContent = `Matchday ${selected.id}: ${selected.name} (${selected.status})`;
+  status.textContent = `${selected.name} (${selected.status})`;
   if (transferInput) transferInput.value = getMatchdayTransferLimit(selected);
   if (startButton) startButton.disabled = selected.status !== 'draft';
   if (endButton) endButton.disabled = selected.status !== 'active';
+  if (cancelStartButton) cancelStartButton.disabled = selected.status !== 'active';
   if (deleteButton) deleteButton.disabled = selected.status === 'active';
   if (settingsButton) settingsButton.disabled = selected.status === 'ended';
+  renderAdminMatchdayOrder();
+}
+
+function renderAdminMatchdayOrder() {
+  const container = document.getElementById('admin-matchday-order');
+  if (!container) return;
   const orderedMatchdays = getOrderedFantasyMatchdays();
-  const selectedIndex = orderedMatchdays.findIndex((matchday) => matchday.id === selected.id);
-  if (moveUpButton) moveUpButton.disabled = selectedIndex <= 0;
-  if (moveDownButton) moveDownButton.disabled = selectedIndex === -1 || selectedIndex >= orderedMatchdays.length - 1;
+  container.innerHTML = `
+    <div class="order-menu-heading">
+      <div><p class="section-title">Season order</p><strong>Matchday sequence</strong></div>
+      <span>${orderedMatchdays.length} matchday${orderedMatchdays.length === 1 ? '' : 's'}</span>
+    </div>
+    <div class="order-menu-list">
+      ${orderedMatchdays.map((matchday, index) => `
+        <div class="order-menu-row ${String(matchday.id) === String(selectedFantasyMatchdayId) ? 'is-selected' : ''}">
+          <span class="order-menu-number">${index + 1}</span>
+          <div class="order-menu-details">
+            <strong>${matchday.name}</strong>
+            <span>${matchday.name} · ${matchday.status}</span>
+          </div>
+          <div class="order-menu-actions">
+            <button class="secondary-btn order-move-button" type="button" data-matchday-id="${matchday.id}" data-direction="-1" ${index === 0 ? 'disabled' : ''}>Move up</button>
+            <button class="secondary-btn order-move-button" type="button" data-matchday-id="${matchday.id}" data-direction="1" ${index === orderedMatchdays.length - 1 ? 'disabled' : ''}>Move down</button>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+  container.querySelectorAll('.order-move-button').forEach((button) => {
+    button.addEventListener('click', () => moveFantasyMatchday(button.dataset.matchdayId, Number(button.dataset.direction))
+      .catch((error) => alert(error.message)));
+  });
 }
 
 function renderAdminPlayers() {
@@ -960,10 +1141,10 @@ async function createFantasyMatchday() {
   renderAdminPlayers();
 }
 
-async function moveFantasyMatchday(direction) {
+async function moveFantasyMatchday(matchdayId, direction) {
   if (!isFantasyAdmin()) return;
   const orderedMatchdays = getOrderedFantasyMatchdays();
-  const selectedIndex = orderedMatchdays.findIndex((matchday) => String(matchday.id) === String(selectedFantasyMatchdayId));
+  const selectedIndex = orderedMatchdays.findIndex((matchday) => String(matchday.id) === String(matchdayId));
   const targetIndex = selectedIndex + direction;
   if (selectedIndex < 0 || targetIndex < 0 || targetIndex >= orderedMatchdays.length) return;
   const current = orderedMatchdays[selectedIndex];
@@ -992,6 +1173,22 @@ async function startFantasyMatchday() {
   renderAdminState();
 }
 
+async function cancelFantasyMatchdayStart() {
+  const selected = fantasyMatchdays.find((matchday) => String(matchday.id) === String(selectedFantasyMatchdayId));
+  if (!isFantasyAdmin() || !selected || selected.status !== 'active') return;
+  if (!confirm(`Cancel the start of ${selected.name}? It will return to draft status.`)) return;
+  const db = await getFantasyDb();
+  fantasyMatchdays = fantasyMatchdays.map((matchday) => {
+    if (matchday.id !== selected.id) return matchday;
+    const { startedAt, ...draftMatchday } = matchday;
+    return { ...draftMatchday, status: 'draft' };
+  });
+  fantasyMatchday = null;
+  await saveFantasyDb({ ...db, fantasyMatchdays });
+  renderAdminState();
+  renderAdminPlayers();
+}
+
 async function endFantasyMatchday() {
   const selected = fantasyMatchdays.find((matchday) => String(matchday.id) === String(selectedFantasyMatchdayId));
   if (!isFantasyAdmin() || !selected || selected.status !== 'active') return;
@@ -1002,6 +1199,13 @@ async function endFantasyMatchday() {
     : matchday);
   fantasyMatchdays = endedMatchdays;
   fantasyMatchday = null;
+  Object.keys(users).forEach((accountKey) => {
+    const user = users[accountKey];
+    if (!Array.isArray(user.fantasyTeam) || user.fantasyTeam.length !== FANTASY_TEAM_SIZE) return;
+    const fantasyMatchdayPoints = { ...(user.fantasyMatchdayPoints || {}) };
+    fantasyMatchdayPoints[selected.id] = calculateFantasyTeamPoints(user.fantasyTeam, user.fantasyCaptain, { ...selected, status: 'ended' });
+    users[accountKey] = { ...user, fantasyMatchdayPoints };
+  });
   recalculateManagerTotals(users, fantasyMatchdays);
   await saveFantasyDb({ ...db, users, fantasyMatchdays });
   applyAggregatedPlayerStats(fantasyMatchdays);
@@ -1013,7 +1217,7 @@ async function endFantasyMatchday() {
 async function deleteFantasyMatchday() {
   const selected = fantasyMatchdays.find((matchday) => String(matchday.id) === String(selectedFantasyMatchdayId));
   if (!isFantasyAdmin() || !selected || selected.status === 'active') return;
-  if (!confirm(`Delete Matchday ${selected.id}: ${selected.name}?`)) return;
+  if (!confirm(`Delete ${selected.name}?`)) return;
   const db = await getFantasyDb();
   fantasyMatchdays = fantasyMatchdays.filter((matchday) => matchday.id !== selected.id);
   selectedFantasyMatchdayId = getOrderedFantasyMatchdays()[0]?.id || null;
@@ -1093,9 +1297,8 @@ function initAdminPage() {
   document.getElementById('admin-create-matchday')?.addEventListener('click', () => createFantasyMatchday().catch((error) => alert(error.message)));
   document.getElementById('admin-save-matchday-settings')?.addEventListener('click', () => saveFantasyMatchdaySettings().catch((error) => alert(error.message)));
   document.getElementById('admin-start-matchday')?.addEventListener('click', () => startFantasyMatchday().catch((error) => alert(error.message)));
+  document.getElementById('admin-cancel-start-matchday')?.addEventListener('click', () => cancelFantasyMatchdayStart().catch((error) => alert(error.message)));
   document.getElementById('admin-end-matchday')?.addEventListener('click', () => endFantasyMatchday().catch((error) => alert(error.message)));
   document.getElementById('admin-delete-matchday')?.addEventListener('click', () => deleteFantasyMatchday().catch((error) => alert(error.message)));
-  document.getElementById('admin-move-matchday-up')?.addEventListener('click', () => moveFantasyMatchday(-1).catch((error) => alert(error.message)));
-  document.getElementById('admin-move-matchday-down')?.addEventListener('click', () => moveFantasyMatchday(1).catch((error) => alert(error.message)));
   document.getElementById('admin-save-stats')?.addEventListener('click', () => saveFantasyPlayerStats().catch((error) => alert(error.message)));
 }

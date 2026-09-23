@@ -43,12 +43,14 @@
       <div class="budget-box">
         <div>
           <div class="budget-label">Budget</div>
-          <div id="teamTotal" class="budget-value under">0.0m</div>
+          <div id="userBudget" class="budget-value under">40.0m</div>
         </div>
       </div>
       <div class="budget-box" style="flex: 1; min-width: 220px;">
         <div style="width:100%;">
-          <div class="budget-label">Used / 40.0m</div>
+          <div class="budget-label">Squad value</div>
+          <div id="teamTotal" class="budget-value under">0.0m</div>
+          <div id="budgetLimitLabel" class="budget-label">Available / 40.0m</div>
           <div class="progress" style="margin-top: 10px;">
             <div id="budgetBar" class="progress-bar" style="width: 0%;"></div>
           </div>
@@ -58,6 +60,13 @@
         <div>
           <div class="budget-label">Squad</div>
           <div id="teamCount" class="budget-value">0/5</div>
+        </div>
+      </div>
+      <div class="budget-box team-points-box">
+        <div>
+          <div class="budget-label">Team points</div>
+          <div id="teamPoints" class="budget-value">0 pts</div>
+          <small id="teamPointsMatchday" class="team-points-matchday">No matchday selected</small>
         </div>
       </div>
     </div>

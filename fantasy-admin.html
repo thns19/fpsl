@@ -59,14 +59,11 @@
           <button id="admin-create-matchday" class="primary-btn" type="button">Create matchday</button>
           <button id="admin-save-matchday-settings" class="secondary-btn" type="button">Save settings</button>
           <button id="admin-start-matchday" class="secondary-btn" type="button">Start matchday</button>
+          <button id="admin-cancel-start-matchday" class="secondary-btn" type="button">Cancel start</button>
           <button id="admin-end-matchday" class="secondary-btn" type="button">End matchday</button>
           <button id="admin-delete-matchday" class="secondary-btn danger-btn" type="button">Delete matchday</button>
         </div>
-        <div class="matchday-order-controls">
-          <span>Season order</span>
-          <button id="admin-move-matchday-up" class="secondary-btn" type="button" title="Move selected matchday earlier">Move up</button>
-          <button id="admin-move-matchday-down" class="secondary-btn" type="button" title="Move selected matchday later">Move down</button>
-        </div>
+        <div id="admin-matchday-order" class="matchday-order-menu"></div>
         <p class="admin-help">Select any matchday to edit its results. Starting a matchday locks team transfers. Ending it applies points to manager totals.</p>
       </section>
 
