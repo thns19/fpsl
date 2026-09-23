@@ -26,6 +26,7 @@ let fantasyDbCache = null;
 let fantasyMatchday = null;
 let fantasyMatchdays = [];
 let selectedFantasyMatchdayId = null;
+let viewedFantasyMatchdayId = null;
 
 async function getFantasyDb() {
   if (fantasyDbCache) return fantasyDbCache;
@@ -42,7 +43,8 @@ async function loadFantasyState() {
       ? db.fantasyMatchdays
       : db.fantasyMatchday ? [db.fantasyMatchday] : [];
     fantasyMatchday = fantasyMatchdays.find((matchday) => matchday.status === 'active') || null;
-    selectedFantasyMatchdayId = db.fantasyAdminState?.selectedMatchdayId || fantasyMatchdays.at(-1)?.id || null;
+    selectedFantasyMatchdayId = db.fantasyAdminState?.selectedMatchdayId || getOrderedFantasyMatchdays().at(-1)?.id || null;
+    viewedFantasyMatchdayId = fantasyMatchday?.id || selectedFantasyMatchdayId;
     if (!Array.isArray(db.fantasyMatchdays) && fantasyMatchdays.length > 0) {
       const { fantasyMatchday: legacyMatchday, ...currentDb } = db;
       db = { ...currentDb, fantasyMatchdays, fantasyAdminState: { selectedMatchdayId: selectedFantasyMatchdayId } };
@@ -95,7 +97,7 @@ function recalculateManagerTotals(users, matchdays) {
         const points = Number(matchday.playerStats?.[playerId]?.matchdayPoints) || 0;
         return teamTotal + points * (playerId === user.fantasyCaptain ? 2 : 1);
       }, 0), 0);
-    const lastMatchday = matchdays.filter((matchday) => matchday.status === 'ended').at(-1);
+    const lastMatchday = getOrderedFantasyMatchdays().filter((matchday) => matchday.status === 'ended').at(-1);
     users[accountKey] = {
       ...user,
       fantasyPoints,
@@ -149,6 +151,13 @@ function showTransferLockMessage() {
 function getMatchdayTransferLimit(matchday) {
   if (!matchday || matchday.transferLimit === undefined) return 1;
   return Math.max(0, Number(matchday.transferLimit) || 0);
+}
+
+function getOrderedFantasyMatchdays() {
+  return fantasyMatchdays
+    .map((matchday, index) => ({ matchday, index }))
+    .sort((left, right) => (Number(left.matchday.order ?? left.index) - Number(right.matchday.order ?? right.index)))
+    .map(({ matchday }) => matchday);
 }
 
 function recordFantasyTransfer() {
@@ -416,10 +425,8 @@ function renderBuildMatchdays() {
   const container = document.getElementById('build-matchdays');
   if (!container) return;
 
-  const activeMatchday = fantasyMatchdays.find((matchday) => matchday.status === 'active');
-  const upcoming = fantasyMatchdays.filter((matchday) => matchday.status === 'draft');
-  const ended = fantasyMatchdays.filter((matchday) => matchday.status === 'ended').slice().reverse();
-  const matchdays = [activeMatchday, ...upcoming, ...ended].filter(Boolean);
+  const matchdays = getOrderedFantasyMatchdays();
+  const activeMatchday = matchdays.find((matchday) => matchday.status === 'active');
 
   if (matchdays.length === 0) {
     container.innerHTML = '<div class="matchday-empty">No matchdays have been created yet.</div>';
@@ -434,9 +441,14 @@ function renderBuildMatchdays() {
       </div>
       ${activeMatchday ? `<span class="matchday-lock">${getMatchdayTransferLimit(activeMatchday)} transfers</span>` : '<span class="matchday-open">Transfers open</span>'}
     </div>
+    <label class="matchday-view-select">Viewing matchday
+      <select id="build-matchday-select">
+        ${matchdays.map((matchday) => `<option value="${matchday.id}" ${String(matchday.id) === String(viewedFantasyMatchdayId) ? 'selected' : ''}>Matchday ${matchday.id}: ${matchday.name}</option>`).join('')}
+      </select>
+    </label>
     <div class="matchday-list">
       ${matchdays.map((matchday) => `
-        <div class="matchday-item ${matchday.status === 'active' ? 'is-active' : ''}">
+        <div class="matchday-item ${matchday.status === 'active' ? 'is-active' : ''} ${String(matchday.id) === String(viewedFantasyMatchdayId) ? 'is-viewed' : ''}" aria-current="${String(matchday.id) === String(viewedFantasyMatchdayId) ? 'true' : 'false'}">
           <div><strong>MD${matchday.id}</strong><span>${matchday.name} · ${getMatchdayTransferLimit(matchday)} transfer${getMatchdayTransferLimit(matchday) === 1 ? '' : 's'}</span></div>
           <span class="matchday-status">${matchday.status === 'active' ? 'Live' : matchday.status === 'ended' ? 'Complete' : 'Upcoming'}</span>
         </div>
@@ -444,6 +456,10 @@ function renderBuildMatchdays() {
     </div>
     ${activeMatchday ? `<p class="matchday-notice">Matchday is live. You can make ${getMatchdayTransferLimit(activeMatchday)} player transfer${getMatchdayTransferLimit(activeMatchday) === 1 ? '' : 's'} before the squad locks.</p>` : '<p class="matchday-notice">Transfers are open until the next matchday begins.</p>'}
   `;
+  document.getElementById('build-matchday-select')?.addEventListener('change', (event) => {
+    viewedFantasyMatchdayId = Number(event.target.value) || null;
+    renderBuildMatchdays();
+  });
 }
 
 function ensureFantasyLogin() {
@@ -859,6 +875,8 @@ function renderAdminState() {
   const endButton = document.getElementById('admin-end-matchday');
   const deleteButton = document.getElementById('admin-delete-matchday');
   const settingsButton = document.getElementById('admin-save-matchday-settings');
+  const moveUpButton = document.getElementById('admin-move-matchday-up');
+  const moveDownButton = document.getElementById('admin-move-matchday-down');
   const transferInput = document.getElementById('admin-transfer-limit');
   const selector = document.getElementById('admin-matchday-select');
   if (!status) return;
@@ -866,7 +884,7 @@ function renderAdminState() {
   if (selector) {
     selector.innerHTML = fantasyMatchdays.length === 0
       ? '<option value="">No matchdays created</option>'
-      : fantasyMatchdays.map((matchday) => `<option value="${matchday.id}">Matchday ${matchday.id}: ${matchday.name} (${matchday.status})</option>`).join('');
+      : getOrderedFantasyMatchdays().map((matchday) => `<option value="${matchday.id}">Matchday ${matchday.id}: ${matchday.name} (${matchday.status})</option>`).join('');
     selector.value = selectedFantasyMatchdayId || '';
   }
 
@@ -877,6 +895,8 @@ function renderAdminState() {
     if (endButton) endButton.disabled = true;
     if (deleteButton) deleteButton.disabled = true;
     if (settingsButton) settingsButton.disabled = true;
+    if (moveUpButton) moveUpButton.disabled = true;
+    if (moveDownButton) moveDownButton.disabled = true;
     return;
   }
 
@@ -886,6 +906,10 @@ function renderAdminState() {
   if (endButton) endButton.disabled = selected.status !== 'active';
   if (deleteButton) deleteButton.disabled = selected.status === 'active';
   if (settingsButton) settingsButton.disabled = selected.status === 'ended';
+  const orderedMatchdays = getOrderedFantasyMatchdays();
+  const selectedIndex = orderedMatchdays.findIndex((matchday) => matchday.id === selected.id);
+  if (moveUpButton) moveUpButton.disabled = selectedIndex <= 0;
+  if (moveDownButton) moveDownButton.disabled = selectedIndex === -1 || selectedIndex >= orderedMatchdays.length - 1;
 }
 
 function renderAdminPlayers() {
@@ -922,6 +946,7 @@ async function createFantasyMatchday() {
     name,
     transferLimit: Math.max(0, Number(document.getElementById('admin-transfer-limit')?.value) || 0),
     status: 'draft',
+    order: fantasyMatchdays.reduce((highest, current, index) => Math.max(highest, Number(current.order ?? index)), -1) + 1,
     createdAt: new Date().toISOString()
   };
   fantasyMatchdays = [...fantasyMatchdays, matchday];
@@ -933,6 +958,26 @@ async function createFantasyMatchday() {
   });
   renderAdminState();
   renderAdminPlayers();
+}
+
+async function moveFantasyMatchday(direction) {
+  if (!isFantasyAdmin()) return;
+  const orderedMatchdays = getOrderedFantasyMatchdays();
+  const selectedIndex = orderedMatchdays.findIndex((matchday) => String(matchday.id) === String(selectedFantasyMatchdayId));
+  const targetIndex = selectedIndex + direction;
+  if (selectedIndex < 0 || targetIndex < 0 || targetIndex >= orderedMatchdays.length) return;
+  const current = orderedMatchdays[selectedIndex];
+  const target = orderedMatchdays[targetIndex];
+  const currentOrder = Number(current.order ?? selectedIndex);
+  const targetOrder = Number(target.order ?? targetIndex);
+  const db = await getFantasyDb();
+  fantasyMatchdays = fantasyMatchdays.map((matchday) => {
+    if (matchday.id === current.id) return { ...matchday, order: targetOrder };
+    if (matchday.id === target.id) return { ...matchday, order: currentOrder };
+    return matchday;
+  });
+  await saveFantasyDb({ ...db, fantasyMatchdays });
+  renderAdminState();
 }
 
 async function startFantasyMatchday() {
@@ -971,7 +1016,7 @@ async function deleteFantasyMatchday() {
   if (!confirm(`Delete Matchday ${selected.id}: ${selected.name}?`)) return;
   const db = await getFantasyDb();
   fantasyMatchdays = fantasyMatchdays.filter((matchday) => matchday.id !== selected.id);
-  selectedFantasyMatchdayId = fantasyMatchdays[0]?.id || null;
+  selectedFantasyMatchdayId = getOrderedFantasyMatchdays()[0]?.id || null;
   fantasyMatchday = fantasyMatchdays.find((matchday) => matchday.status === 'active') || null;
   const users = { ...(db.users || {}) };
   recalculateManagerTotals(users, fantasyMatchdays);
@@ -1035,7 +1080,7 @@ function initAdminPage() {
   if (guard) guard.hidden = true;
   if (panel) panel.hidden = false;
   if (!fantasyMatchdays.some((matchday) => String(matchday.id) === String(selectedFantasyMatchdayId))) {
-    selectedFantasyMatchdayId = fantasyMatchdays.at(-1)?.id || null;
+    selectedFantasyMatchdayId = getOrderedFantasyMatchdays().at(-1)?.id || null;
   }
   renderAdminState();
   renderAdminPlayers();
@@ -1050,5 +1095,7 @@ function initAdminPage() {
   document.getElementById('admin-start-matchday')?.addEventListener('click', () => startFantasyMatchday().catch((error) => alert(error.message)));
   document.getElementById('admin-end-matchday')?.addEventListener('click', () => endFantasyMatchday().catch((error) => alert(error.message)));
   document.getElementById('admin-delete-matchday')?.addEventListener('click', () => deleteFantasyMatchday().catch((error) => alert(error.message)));
+  document.getElementById('admin-move-matchday-up')?.addEventListener('click', () => moveFantasyMatchday(-1).catch((error) => alert(error.message)));
+  document.getElementById('admin-move-matchday-down')?.addEventListener('click', () => moveFantasyMatchday(1).catch((error) => alert(error.message)));
   document.getElementById('admin-save-stats')?.addEventListener('click', () => saveFantasyPlayerStats().catch((error) => alert(error.message)));
 }

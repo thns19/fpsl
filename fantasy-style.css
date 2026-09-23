@@ -264,6 +264,16 @@ button, input, select { font: inherit; }
   font-size: 0.85rem;
 }
 
+.matchday-order-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+}
+
 .admin-player-list {
   display: grid;
   gap: 8px;
@@ -1215,6 +1225,25 @@ tr:last-child td {
   padding-bottom: 3px;
 }
 
+.matchday-view-select {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+}
+
+.matchday-view-select select {
+  min-width: 220px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 9px 12px;
+  background: rgba(255,255,255,0.04);
+  color: var(--text);
+}
+
 .matchday-item {
   display: flex;
   align-items: center;
@@ -1245,6 +1274,10 @@ tr:last-child td {
 .matchday-item.is-active {
   border-color: rgba(255,95,162,0.5);
   background: rgba(255,95,162,0.08);
+}
+
+.matchday-item.is-viewed {
+  box-shadow: 0 0 0 2px rgba(0,240,255,0.35);
 }
 
 .matchday-status {
