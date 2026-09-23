@@ -680,11 +680,13 @@ window.selectPlayerForSlot = function (playerId, slotIndex) {
   const existingIndex = team.indexOf(playerId);
   if (existingIndex >= 0) team[existingIndex] = null;
   team[slotIndex] = playerId;
-  if (team.filter(Boolean).length !== FANTASY_TEAM_SIZE) return;
-  if (getTeamTotal(team.filter(Boolean)) > getCurrentFantasyBudget(team.filter(Boolean))) {
+
+  const filledTeam = team.filter(Boolean);
+  if (filledTeam.length === FANTASY_TEAM_SIZE && getTeamTotal(filledTeam) > getCurrentFantasyBudget(filledTeam)) {
     alert('This selection would exceed the 40.0M budget.');
     return;
   }
+
   if (!recordFantasyTransfer()) return;
   saveFantasyTeam(team);
   document.getElementById('player-picker').hidden = true;
