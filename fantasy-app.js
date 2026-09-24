@@ -29,6 +29,27 @@ let selectedFantasyMatchdayId = null;
 let viewedFantasyMatchdayId = null;
 let fantasyAccount = null;
 let fantasyUsers = {};
+let playerStatsSort = { key: null, direction: 1 };
+
+function getFantasyTeamPlayerIds(user) {
+  return Array.isArray(user?.fantasyTeam)
+    ? user.fantasyTeam.filter(Boolean)
+    : Object.values(user?.fantasyTeam || {}).filter(Boolean);
+}
+
+function getSubmittedFantasyUsers() {
+  return Object.values(fantasyUsers).filter((user) => getFantasyTeamPlayerIds(user).length === FANTASY_TEAM_SIZE);
+}
+
+function getPlayerSelectionStats(playerId) {
+  const managers = getSubmittedFantasyUsers();
+  const selectedCount = managers.filter((manager) => getFantasyTeamPlayerIds(manager).includes(playerId)).length;
+  return {
+    selectedCount,
+    managerCount: managers.length,
+    percentage: managers.length ? Math.round((selectedCount / managers.length) * 100) : 0
+  };
+}
 
 async function getFantasyDb() {
   if (fantasyDbCache) return fantasyDbCache;
@@ -68,6 +89,26 @@ async function loadFantasyState() {
     if (account?.fantasyCaptain && !getStoredFantasyCaptain()) saveFantasyCaptain(account.fantasyCaptain);
     if (account?.fantasySubmittedMatchdayId && !getFantasySubmissionState()) {
       saveFantasySubmissionState({ matchdayId: account.fantasySubmittedMatchdayId, transfersUsed: Number(account.fantasyTransfersUsed) || 0 });
+    }
+    const usersWithAutoCaptains = { ...(db.users || {}) };
+    let autoCaptainsChanged = false;
+    Object.entries(usersWithAutoCaptains).forEach(([accountKey, user]) => {
+      const team = getFantasyTeamPlayerIds(user);
+      const starters = team.slice(0, FANTASY_STARTER_COUNT);
+      if (team.length !== FANTASY_TEAM_SIZE || starters.includes(user.fantasyCaptain)) return;
+      const highestValueStarter = starters
+        .map((playerId) => getPlayerById(playerId))
+        .filter(Boolean)
+        .sort((left, right) => Number(right.value) - Number(left.value))[0];
+      if (!highestValueStarter) return;
+      usersWithAutoCaptains[accountKey] = { ...user, fantasyCaptain: highestValueStarter.id };
+      fantasyUsers[accountKey] = usersWithAutoCaptains[accountKey];
+      if (currentUser?.username.toLowerCase() === accountKey) fantasyAccount = usersWithAutoCaptains[accountKey];
+      autoCaptainsChanged = true;
+    });
+    if (autoCaptainsChanged) {
+      db = { ...db, users: usersWithAutoCaptains };
+      saveFantasyDb(db).catch(() => {});
     }
     if (currentUser && fantasyAccount) fantasyUsers[currentUser.username.toLowerCase()] = fantasyAccount;
     applyAggregatedPlayerStats(fantasyMatchdays);
@@ -945,21 +986,58 @@ function renderPlayersTable() {
   const table = document.getElementById('playersTable');
   if (!table) return;
 
+  const managerCount = getSubmittedFantasyUsers().length;
+  const columns = [
+    { key: 'name', label: 'Player', type: 'text' },
+    { key: 'team', label: 'Team', type: 'text' },
+    { key: 'value', label: 'Value', type: 'number' },
+    { key: 'form', label: 'Form', type: 'number' },
+    { key: 'goals', label: 'Goals', type: 'number' },
+    { key: 'ownGoals', label: 'Own Goals', type: 'number' },
+    { key: 'mvps', label: 'MVPs', type: 'number' },
+    { key: 'fantasyPoints', label: 'Fantasy Pts', type: 'number' },
+    { key: 'selectionPercentage', label: 'Selected By', type: 'number' }
+  ];
+  const selectionStats = new Map(FANTASY_PLAYERS.map((player) => [player.id, getPlayerSelectionStats(player.id)]));
+  const sortedPlayers = [...FANTASY_PLAYERS];
+  if (playerStatsSort.key) {
+    const column = columns.find(({ key }) => key === playerStatsSort.key);
+    sortedPlayers.sort((left, right) => {
+      const leftStats = selectionStats.get(left.id);
+      const rightStats = selectionStats.get(right.id);
+      const getValue = (player, stats) => ({
+        name: player.name,
+        team: player.team || '',
+        value: Number(player.value) || 0,
+        form: getPlayerForm(player) ?? -1,
+        goals: Number(player.goals) || 0,
+        ownGoals: Number(player.ownGoals) || 0,
+        mvps: Number(player.mvps) || 0,
+        fantasyPoints: getPlayerFantasyPoints(player),
+        selectionPercentage: stats.percentage
+      }[column.key]);
+      const leftValue = getValue(left, leftStats);
+      const rightValue = getValue(right, rightStats);
+      const comparison = column.type === 'text'
+        ? String(leftValue).localeCompare(String(rightValue))
+        : leftValue - rightValue;
+      return comparison * playerStatsSort.direction || left.name.localeCompare(right.name);
+    });
+  }
+  const sortHeader = ({ key, label }) => {
+    const active = playerStatsSort.key === key;
+    const direction = active ? (playerStatsSort.direction === 1 ? 'asc' : 'desc') : '';
+    return `<th aria-sort="${active ? direction : 'none'}"><button class="table-sort-button" type="button" data-sort-key="${key}">${label}<span class="table-sort-indicator">${direction}</span></button></th>`;
+  };
+
   table.innerHTML = `
     <thead>
       <tr>
-        <th>Player</th>
-          <th>Team</th>
-        <th>Value</th>
-        <th>Form</th>
-        <th>Goals</th>
-        <th>Own Goals</th>
-        <th>MVPs</th>
-        <th>Fantasy Pts</th>
+        ${columns.map(sortHeader).join('')}
       </tr>
     </thead>
     <tbody>
-      ${FANTASY_PLAYERS.map((player) => `
+      ${sortedPlayers.map((player) => `
         <tr class="player-table-row" onclick="openPlayerDetails('${player.id}')" tabindex="0" onkeydown="if(event.key === 'Enter' || event.key === ' ') openPlayerDetails('${player.id}')">
           <td>${player.name}</td>
           <td><span class="table-team"><img src="${getTeamLogoPath(player.team)}" alt="" loading="lazy" onerror="this.remove()">${player.team || 'Unknown team'}</span></td>
@@ -969,10 +1047,23 @@ function renderPlayersTable() {
           <td>${player.ownGoals}</td>
           <td>${player.mvps}</td>
           <td>${getPlayerFantasyPoints(player)}</td>
+          <td><strong>${selectionStats.get(player.id).percentage}%</strong><small class="selection-rate-count">${selectionStats.get(player.id).selectedCount}/${managerCount} managers</small></td>
         </tr>
       `).join('')}
     </tbody>
   `;
+  table.querySelectorAll('[data-sort-key]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const key = button.dataset.sortKey;
+      playerStatsSort = {
+        key,
+        direction: playerStatsSort.key === key
+          ? playerStatsSort.direction * -1
+          : ['name', 'team'].includes(key) ? 1 : -1
+      };
+      renderPlayersTable();
+    });
+  });
 }
 
 function formatPlayerName(player) {
@@ -1122,7 +1213,12 @@ function renderAdminTeams(selectedUsername) {
 
   const managers = Object.entries(fantasyUsers)
     .map(([accountKey, user]) => ({ accountKey, user }))
-    .filter(({ user }) => Array.isArray(user.fantasyTeam) && user.fantasyTeam.length > 0)
+    .map(({ accountKey, user }) => ({
+      accountKey,
+      user,
+      team: Array.isArray(user?.fantasyTeam) ? user.fantasyTeam : Object.values(user?.fantasyTeam || {})
+    }))
+    .filter(({ team }) => team.length > 0)
     .sort((left, right) => String(left.user.username || left.accountKey).localeCompare(String(right.user.username || right.accountKey)));
 
   if (managers.length === 0) {
@@ -1135,7 +1231,7 @@ function renderAdminTeams(selectedUsername) {
   const activeManager = managers.find(({ accountKey }) => accountKey === selectedUsername) || managers[0];
   selector.disabled = false;
   selector.innerHTML = managers.map(({ accountKey, user }) => `<option value="${accountKey}" ${accountKey === activeManager.accountKey ? 'selected' : ''}>${user.username || accountKey}</option>`).join('');
-  const team = activeManager.user.fantasyTeam.map((playerId) => getPlayerById(playerId)).filter(Boolean);
+  const team = activeManager.team.map((playerId) => getPlayerById(playerId)).filter(Boolean);
   const captain = getPlayerById(activeManager.user.fantasyCaptain);
   details.innerHTML = `
     <div class="admin-team-heading">
@@ -1178,7 +1274,6 @@ async function createFantasyMatchday() {
   });
   renderAdminState();
   renderAdminPlayers();
-  renderAdminTeams();
 }
 
 async function moveFantasyMatchday(matchdayId, direction) {
@@ -1328,6 +1423,7 @@ function initAdminPage() {
   }
   renderAdminState();
   renderAdminPlayers();
+  renderAdminTeams();
   document.getElementById('admin-matchday-select')?.addEventListener('change', (event) => {
     selectedFantasyMatchdayId = Number(event.target.value) || null;
     renderAdminState();

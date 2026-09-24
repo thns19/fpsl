@@ -277,11 +277,14 @@ button, input, select { font: inherit; }
 }
 
 .admin-team-select-label select {
+  width: 100%;
+  min-width: 220px;
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 10px 12px;
   background: rgba(255,255,255,0.04);
   color: var(--text);
+  color-scheme: dark;
 }
 
 .admin-team-details {
@@ -1159,6 +1162,39 @@ th {
   font-size: 0.72rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+}
+
+.table-sort-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+
+.table-sort-button:hover,
+.table-sort-button:focus-visible {
+  color: var(--cyan);
+}
+
+.table-sort-indicator {
+  min-width: 25px;
+  color: var(--cyan);
+  font-size: 0.62rem;
+}
+
+.selection-rate-count {
+  display: block;
+  margin-top: 3px;
+  color: var(--dim);
+  font-size: 0.72rem;
+  white-space: nowrap;
 }
 
 tr:last-child td {
