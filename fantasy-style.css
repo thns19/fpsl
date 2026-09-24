@@ -1680,6 +1680,7 @@ tr:last-child td {
   gap: 3px;
   margin-top: 16px;
   margin-bottom: 0;
+}
 
 .gameweek-current h2 { margin: 0; }
 .gameweek-current span { color: var(--muted); font-size: 0.75rem; }
@@ -1857,6 +1858,30 @@ tr:last-child td {
 
 @media (max-width: 520px) {
   .selected-list { grid-template-columns: 1fr; }
+  .table-card {
+    overflow: auto;
+  }
+
+  #playersTable {
+    min-width: 920px;
+    table-layout: auto;
+  }
+
+  #playersTable th,
+  #playersTable td {
+    padding: 10px 12px;
+    white-space: nowrap;
+    overflow-wrap: normal;
+  }
+
+  #playersTable th:first-child,
+  #playersTable td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: var(--panel-strong);
+  }
+
   .detail-hero { gap: 14px; padding-left: 18px; }
   .detail-player-visual { min-width: 166px; height: 126px; margin-top: -12px; margin-bottom: -18px; gap: 4px; }
   .detail-shirt { width: 54px; height: 60px; }
