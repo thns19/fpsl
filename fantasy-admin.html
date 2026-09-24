@@ -53,11 +53,15 @@
           <label>Matchday name
             <input id="admin-matchday-name" type="text" placeholder="e.g. Matchday 1" />
           </label>
+          <label>Squad lock time
+            <input id="admin-matchday-start" type="datetime-local" />
+          </label>
           <label>Transfers allowed
             <input id="admin-transfer-limit" type="number" min="0" value="1" />
           </label>
           <button id="admin-create-matchday" class="primary-btn" type="button">Create matchday</button>
           <button id="admin-save-matchday-settings" class="secondary-btn" type="button">Save settings</button>
+          <button id="admin-reset-powerups" class="secondary-btn" type="button">Reset Powerups</button>
           <button id="admin-start-matchday" class="secondary-btn" type="button">Start matchday</button>
           <button id="admin-cancel-start-matchday" class="secondary-btn" type="button">Cancel start</button>
           <button id="admin-end-matchday" class="secondary-btn" type="button">End matchday</button>

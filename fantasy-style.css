@@ -977,12 +977,72 @@ h1 span {
 .squad-submit-status strong { font-size: 0.82rem; }
 .squad-submit-status span { color: var(--muted); font-size: 0.75rem; }
 
+.squad-submit-status .squad-countdown-label {
+  color: var(--gold);
+}
+
+.squad-countdown-label strong {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.squad-countdown-label strong.is-expired {
+  color: var(--red);
+}
+
 .squad-submit-actions {
   display: flex;
   gap: 8px;
 }
 
 .squad-submit-actions button { flex: 1; }
+
+.fantasy-powerups {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.powerup-heading,
+.powerup-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.powerup-heading small,
+.powerup-item span {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.powerup-list {
+  display: grid;
+  gap: 6px;
+}
+
+.powerup-item {
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: rgba(255,255,255,0.025);
+}
+
+.powerup-item > div {
+  display: grid;
+  gap: 2px;
+}
+
+.powerup-item .secondary-btn {
+  flex: 0 0 auto;
+  padding: 7px 11px;
+  font-size: 0.72rem;
+}
+
+.powerup-item.is-used {
+  opacity: 0.62;
+}
 
 .selected-list {
   display: flex;
@@ -1196,6 +1256,10 @@ th {
   font-size: 0.72rem;
   white-space: nowrap;
 }
+
+.ownership-trend.up { color: var(--green); }
+.ownership-trend.down { color: var(--red); }
+.ownership-trend.neutral { color: var(--muted); }
 
 tr:last-child td {
   border-bottom: none;
