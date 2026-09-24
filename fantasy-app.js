@@ -28,6 +28,7 @@ let fantasyMatchdays = [];
 let selectedFantasyMatchdayId = null;
 let viewedFantasyMatchdayId = null;
 let fantasyAccount = null;
+let fantasyUsers = {};
 
 async function getFantasyDb() {
   if (fantasyDbCache) return fantasyDbCache;
@@ -38,8 +39,10 @@ async function getFantasyDb() {
 }
 
 async function loadFantasyState() {
+  fantasyUsers = {};
   try {
     let db = await getFantasyDb();
+    fantasyUsers = { ...(db.users || {}) };
     fantasyMatchdays = Array.isArray(db.fantasyMatchdays)
       ? db.fantasyMatchdays
       : db.fantasyMatchday ? [db.fantasyMatchday] : [];
@@ -66,6 +69,7 @@ async function loadFantasyState() {
     if (account?.fantasySubmittedMatchdayId && !getFantasySubmissionState()) {
       saveFantasySubmissionState({ matchdayId: account.fantasySubmittedMatchdayId, transfersUsed: Number(account.fantasyTransfersUsed) || 0 });
     }
+    if (currentUser && fantasyAccount) fantasyUsers[currentUser.username.toLowerCase()] = fantasyAccount;
     applyAggregatedPlayerStats(fantasyMatchdays);
   } catch (error) {
     fantasyMatchday = null;
@@ -1111,6 +1115,39 @@ function renderAdminPlayers() {
   `).join('');
 }
 
+function renderAdminTeams(selectedUsername) {
+  const selector = document.getElementById('admin-team-select');
+  const details = document.getElementById('admin-team-details');
+  if (!selector || !details) return;
+
+  const managers = Object.entries(fantasyUsers)
+    .map(([accountKey, user]) => ({ accountKey, user }))
+    .filter(({ user }) => Array.isArray(user.fantasyTeam) && user.fantasyTeam.length > 0)
+    .sort((left, right) => String(left.user.username || left.accountKey).localeCompare(String(right.user.username || right.accountKey)));
+
+  if (managers.length === 0) {
+    selector.innerHTML = '<option value="">No teams submitted yet</option>';
+    selector.disabled = true;
+    details.innerHTML = '<p class="empty-state">No players have been selected yet.</p>';
+    return;
+  }
+
+  const activeManager = managers.find(({ accountKey }) => accountKey === selectedUsername) || managers[0];
+  selector.disabled = false;
+  selector.innerHTML = managers.map(({ accountKey, user }) => `<option value="${accountKey}" ${accountKey === activeManager.accountKey ? 'selected' : ''}>${user.username || accountKey}</option>`).join('');
+  const team = activeManager.user.fantasyTeam.map((playerId) => getPlayerById(playerId)).filter(Boolean);
+  const captain = getPlayerById(activeManager.user.fantasyCaptain);
+  details.innerHTML = `
+    <div class="admin-team-heading">
+      <strong>${activeManager.user.username || activeManager.accountKey}</strong>
+      <span>Captain: ${captain?.name || 'Not selected'}</span>
+    </div>
+    <ul class="admin-team-list">
+      ${team.map((player, index) => `<li><span>${player.name}</span><small>${index < FANTASY_STARTER_COUNT ? 'Starter' : 'Substitute'}${player.id === activeManager.user.fantasyCaptain ? ' · Captain' : ''}</small></li>`).join('')}
+    </ul>
+  `;
+}
+
 async function createFantasyMatchday() {
   if (!isFantasyAdmin()) return;
   const nameInput = document.getElementById('admin-matchday-name');
@@ -1141,6 +1178,7 @@ async function createFantasyMatchday() {
   });
   renderAdminState();
   renderAdminPlayers();
+  renderAdminTeams();
 }
 
 async function moveFantasyMatchday(matchdayId, direction) {
@@ -1295,6 +1333,9 @@ function initAdminPage() {
     renderAdminState();
     renderAdminPlayers();
     saveSelectedMatchdayId(selectedFantasyMatchdayId).catch((error) => alert(error.message));
+  });
+  document.getElementById('admin-team-select')?.addEventListener('change', (event) => {
+    renderAdminTeams(event.target.value);
   });
   document.getElementById('admin-create-matchday')?.addEventListener('click', () => createFantasyMatchday().catch((error) => alert(error.message)));
   document.getElementById('admin-save-matchday-settings')?.addEventListener('click', () => saveFantasyMatchdaySettings().catch((error) => alert(error.message)));
