@@ -39,6 +39,10 @@
 
     <section id="build-matchdays" class="build-matchdays" aria-live="polite"></section>
 
+    <div class="build-powerup-bar">
+      <div id="fantasy-powerups" class="fantasy-powerups"></div>
+    </div>
+
     <div class="budget-wrap panel" style="margin-top: 18px; padding: 18px;">
       <div class="budget-box">
         <div>
@@ -69,6 +73,19 @@
           <small id="teamPointsMatchday" class="team-points-matchday">No matchday selected</small>
         </div>
       </div>
+      <div class="budget-box team-rank-box">
+        <div>
+          <div class="budget-label">Rank</div>
+          <div id="teamRank" class="budget-value">--</div>
+          <small class="team-points-matchday">Current matchday</small>
+        </div>
+      </div>
+    </div>
+
+    <div id="squad-submit-status" class="squad-submit-status build-submit-status"></div>
+    <div class="squad-action-bar">
+      <button id="saveTeam" class="secondary-btn" type="button" onclick="saveFantasyDraftToStorage()">Save draft</button>
+      <button id="submitTeam" class="primary-btn" type="button" onclick="saveFantasyTeamToStorage()">Submit squad</button>
     </div>
 
     <section class="team-builder" style="margin-top: 20px;">
@@ -94,21 +111,9 @@
             <div class="bench-slot" data-slot="4"></div>
           </aside>
         </div>
+        <div id="fantasy-notifications" class="fantasy-notifications"></div>
       </div>
 
-      <aside class="summary-card">
-        <h3>Selected Squad</h3>
-        <p class="summary-copy">Choose four starters and one substitute. Set one captain for double points.</p>
-        <div id="teamSummary" class="selected-list"></div>
-        <div style="margin-top: 18px;">
-          <div id="squad-submit-status" class="squad-submit-status"></div>
-          <div id="fantasy-powerups" class="fantasy-powerups"></div>
-          <div class="squad-submit-actions">
-            <button id="saveTeam" class="secondary-btn" type="button" onclick="saveFantasyDraftToStorage()">Save draft</button>
-            <button id="submitTeam" class="primary-btn" type="button" onclick="saveFantasyTeamToStorage()">Submit squad</button>
-          </div>
-        </div>
-      </aside>
     </section>
   </div>
 
@@ -123,6 +128,13 @@
       </div>
       <div id="player-picker-list" class="player-picker-list"></div>
     </div>
+  </div>
+
+  <div id="player-detail-overlay" class="player-detail-overlay" hidden>
+    <article class="player-detail-modal" role="dialog" aria-modal="true" aria-labelledby="player-detail-name">
+      <button id="close-player-detail" class="detail-close" type="button" aria-label="Close player details">&times;</button>
+      <div id="player-detail-content"></div>
+    </article>
   </div>
 
   <div id="fantasy-auth-overlay" class="auth-overlay">

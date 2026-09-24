@@ -116,6 +116,35 @@ function getPlayerSelectionStats(playerId) {
   };
 }
 
+const FANTASY_TEAM_DIFFICULTY = {
+  BADiles: 5,
+  'Volos Drummers': 4,
+  Lampater: 4,
+  R1: 5,
+  Axtarmades: 5,
+  'Team Till Death': 2,
+  Hornets: 1,
+  'Basement Boys': 5,
+  Warriors: 3,
+  'Niki Alimou': 1,
+  'Spasmena Mila': 3,
+  Thryloi: 4,
+  'Golden B.': 1,
+  Polo: 3,
+  Ksades: 1,
+  'Midi Kidz': 2,
+  'Air Condition': 2,
+  EX7T: 1
+};
+
+function getFantasyFixtureDifficulty(team) {
+  return FANTASY_TEAM_DIFFICULTY[team] || 3;
+}
+
+function getFantasyNextFixture(player) {
+  return getFantasyPlayerFixtures(player)[0] || null;
+}
+
 async function getFantasyDb() {
   if (fantasyDbCache) return fantasyDbCache;
   const response = await fetch(FANTASY_DB_URL);
@@ -685,6 +714,9 @@ function renderBuildMatchdays() {
 
   const matchdays = getOrderedFantasyMatchdays();
   const activeMatchday = matchdays.find((matchday) => matchday.status === 'active');
+  const viewedIndex = Math.max(0, matchdays.findIndex((matchday) => String(matchday.id) === String(viewedFantasyMatchdayId)));
+  const viewedMatchday = matchdays[viewedIndex] || matchdays[0];
+  viewedFantasyMatchdayId = viewedMatchday.id;
 
   if (matchdays.length === 0) {
     container.innerHTML = '<div class="matchday-empty">No matchdays have been created yet.</div>';
@@ -692,28 +724,29 @@ function renderBuildMatchdays() {
   }
 
   container.innerHTML = `
-    <div class="matchday-heading">
-      <div>
-        <p class="section-title">League calendar</p>
-        <h2>Matchdays</h2>
+    <div class="gameweek-nav">
+      <button class="gameweek-arrow" type="button" data-gameweek-index="${viewedIndex - 1}" ${viewedIndex === 0 ? 'disabled' : ''} aria-label="Previous matchday">&lsaquo;</button>
+      <div class="gameweek-current">
+        <p class="section-title">Gameweek</p>
+        <h2>${viewedMatchday.name}</h2>
+        <span>${viewedMatchday.status === 'active' ? 'Live' : viewedMatchday.status === 'ended' ? 'Complete' : 'Upcoming'} · ${getMatchdayTransferLimit(viewedMatchday)} transfer${getMatchdayTransferLimit(viewedMatchday) === 1 ? '' : 's'}</span>
       </div>
-      ${activeMatchday ? `<span class="matchday-lock">${getMatchdayTransferLimit(activeMatchday)} transfers</span>` : '<span class="matchday-open">Transfers open</span>'}
+      <button class="gameweek-arrow" type="button" data-gameweek-index="${viewedIndex + 1}" ${viewedIndex === matchdays.length - 1 ? 'disabled' : ''} aria-label="Next matchday">&rsaquo;</button>
     </div>
-    <label class="matchday-view-select">Viewing matchday
+    <label class="matchday-view-select">Viewing gameweek
       <select id="build-matchday-select">
         ${matchdays.map((matchday) => `<option value="${matchday.id}" ${String(matchday.id) === String(viewedFantasyMatchdayId) ? 'selected' : ''}>${matchday.name}</option>`).join('')}
       </select>
     </label>
-    <div class="matchday-list">
-      ${matchdays.map((matchday) => `
-        <div class="matchday-item ${matchday.status === 'active' ? 'is-active' : ''} ${String(matchday.id) === String(viewedFantasyMatchdayId) ? 'is-viewed' : ''}" aria-current="${String(matchday.id) === String(viewedFantasyMatchdayId) ? 'true' : 'false'}">
-          <div><strong>${matchday.name}</strong><span>${getMatchdayTransferLimit(matchday)} transfer${getMatchdayTransferLimit(matchday) === 1 ? '' : 's'}</span></div>
-          <span class="matchday-status">${matchday.status === 'active' ? 'Live' : matchday.status === 'ended' ? 'Complete' : 'Upcoming'}</span>
-        </div>
-      `).join('')}
-    </div>
-    ${activeMatchday ? `<p class="matchday-notice">Matchday is live. You can make ${getMatchdayTransferLimit(activeMatchday)} player transfer${getMatchdayTransferLimit(activeMatchday) === 1 ? '' : 's'} before the squad locks.</p>` : '<p class="matchday-notice">Transfers are open until the next matchday begins.</p>'}
+    <p class="matchday-notice">${activeMatchday ? `Matchday is live. You can make ${getMatchdayTransferLimit(activeMatchday)} player transfer${getMatchdayTransferLimit(activeMatchday) === 1 ? '' : 's'} before the squad locks.` : 'Transfers are open until the next matchday begins.'}</p>
   `;
+  container.querySelectorAll('[data-gameweek-index]').forEach((button) => {
+    button.addEventListener('click', () => {
+      viewedFantasyMatchdayId = matchdays[Number(button.dataset.gameweekIndex)]?.id || viewedFantasyMatchdayId;
+      renderBuildMatchdays();
+      renderBuildBoard();
+    });
+  });
   document.getElementById('build-matchday-select')?.addEventListener('change', (event) => {
     viewedFantasyMatchdayId = Number(event.target.value) || null;
     renderBuildMatchdays();
@@ -762,6 +795,39 @@ function renderFantasyPowerups() {
   `;
 }
 
+function renderFantasyNotifications() {
+  const container = document.getElementById('fantasy-notifications');
+  if (!container) return;
+  const team = getStoredFantasyTeam().filter(Boolean);
+  const target = getFantasyPowerupTargetMatchday();
+  const notifications = [];
+  if (target?.startAt && !hasFantasyLockPassed(target)) {
+    notifications.push(`Squad lock: ${target.name} locks at ${new Date(target.startAt).toLocaleString()}.`);
+  }
+  if (team.length < FANTASY_TEAM_SIZE) {
+    notifications.push(`Your squad is incomplete: select ${FANTASY_TEAM_SIZE - team.length} more player${FANTASY_TEAM_SIZE - team.length === 1 ? '' : 's'}.`);
+  }
+  const captain = getStoredFantasyCaptain() || fantasyAccount?.fantasyCaptain;
+  if (team.length >= FANTASY_STARTER_COUNT && !team.slice(0, FANTASY_STARTER_COUNT).includes(captain)) {
+    notifications.push('Choose a captain from your starting four.');
+  }
+  if (target && areFantasyPowerupsAvailable(target)) {
+    const unusedPowerups = ['tripleCaptain', 'unlimitedTransfers'].filter((powerup) => !hasFantasyPowerupBeenUsed(powerup));
+    if (unusedPowerups.length) notifications.push(`Unused powerups: ${unusedPowerups.map((powerup) => powerup === 'tripleCaptain' ? 'Triple Captain' : 'Unlimited Transfers').join(' and ')}.`);
+  }
+  const priceChanges = team.map((playerId) => {
+    const player = getPlayerById(playerId);
+    const previousValue = Number(fantasyAccount?.fantasyPriceSnapshot?.[playerId]);
+    return player && Number.isFinite(previousValue) && Number(player.value) !== previousValue
+      ? `${player.name} is now ${formatMoney(player.value)} (was ${formatMoney(previousValue)}).`
+      : null;
+  }).filter(Boolean);
+  priceChanges.forEach((change) => notifications.push(change));
+  container.innerHTML = notifications.length
+    ? `<div class="notification-heading"><span class="section-title">Notifications</span><small>${notifications.length}</small></div><ul>${notifications.map((notification) => `<li>${notification}</li>`).join('')}</ul>`
+    : '<div class="notification-heading"><span class="section-title">Notifications</span><small>All clear</small></div>';
+}
+
 window.useFantasyPowerup = async function (powerupName) {
   if (!ensureFantasyLogin()) return;
   const target = getFantasyPowerupTargetMatchday();
@@ -802,11 +868,11 @@ function renderBuildBoard() {
   const teamPointsLabel = document.getElementById('teamPoints');
   const teamPointsMatchdayLabel = document.getElementById('teamPointsMatchday');
   const teamCountLabel = document.getElementById('teamCount');
+  const teamRankLabel = document.getElementById('teamRank');
   const budgetBar = document.getElementById('budgetBar');
 
-  if (!teamSummary) return;
-
   renderSquadSubmissionStatus();
+  renderFantasyNotifications();
   renderFantasyPowerups();
 
   const storedTeam = getStoredFantasyTeam();
@@ -840,6 +906,19 @@ function renderBuildBoard() {
 
   if (teamPointsLabel) teamPointsLabel.textContent = `${teamPoints} pts`;
   if (teamPointsMatchdayLabel) teamPointsMatchdayLabel.textContent = viewedMatchday?.name || 'No matchday selected';
+  if (teamRankLabel) {
+    const currentUser = getCurrentFantasyUser();
+    const rankRows = viewedMatchday && viewedMatchday.status !== 'draft'
+      ? getSubmittedFantasyUsers().map((user) => ({
+        username: user.username,
+        points: user.fantasyMatchdayPoints?.[viewedMatchday.id] !== undefined
+          ? Number(user.fantasyMatchdayPoints[viewedMatchday.id]) || 0
+          : calculateFantasyTeamPoints(user.fantasyTeam, user.fantasyCaptain, viewedMatchday, user.fantasyPowerups)
+      })).sort((left, right) => right.points - left.points)
+      : [];
+    const rank = currentUser ? rankRows.findIndex((row) => row.username === currentUser.username) : -1;
+    teamRankLabel.textContent = rank >= 0 ? `#${rank + 1}` : '--';
+  }
 
   if (budgetBar) {
     const usage = budget > 0 ? Math.min((total / budget) * 100, 100) : 100;
@@ -848,29 +927,30 @@ function renderBuildBoard() {
 
   const selectedPlayers = occupiedTeam.map((playerId) => getPlayerById(playerId)).filter(Boolean);
   const captain = getStoredFantasyCaptain();
-  if (selectedPlayers.length === 0) {
-    teamSummary.innerHTML = '<p class="empty-state">Your squad is empty. Pick your five-man team from the list below.</p>';
-  } else {
-    teamSummary.innerHTML = selectedPlayers.map((player) => `
-      <div class="selected-player">
-        ${player.team ? `<span class="team-avatar"><img src="${getTeamLogoPath(player.team)}" alt="" loading="lazy" onerror="this.remove()"></span>` : ''}
-        <div>
-          <strong>${player.name}</strong>
-          <span class="player-role">${team.indexOf(player.id) < 4 ? 'Starter' : 'Substitute'} · ${player.team || 'Team unknown'} · ${getPlayerFantasyPoints(player)} pts</span>
+  if (teamSummary) {
+    if (selectedPlayers.length === 0) {
+      teamSummary.innerHTML = '<p class="empty-state">Your squad is empty. Pick your five-man team from the list below.</p>';
+    } else {
+      teamSummary.innerHTML = selectedPlayers.map((player) => `
+        <div class="selected-player">
+          ${player.team ? `<span class="team-avatar"><img src="${getTeamLogoPath(player.team)}" alt="" loading="lazy" onerror="this.remove()"></span>` : ''}
+          <div>
+            <strong>${player.name}</strong>
+            <span class="player-role">${team.indexOf(player.id) < 4 ? 'Starter' : 'Substitute'} · ${player.team || 'Team unknown'} · ${getPlayerFantasyPoints(player)} pts</span>
+          </div>
+          <div class="selected-player-actions">
+            ${team.indexOf(player.id) < 4 ? `<button class="small-btn captain-btn ${captain === player.id ? 'selected' : ''}" type="button" onclick="setFantasyCaptain('${player.id}')">${captain === player.id ? 'Captain' : 'Make captain'}</button>` : ''}
+          </div>
         </div>
-        <div class="selected-player-actions">
-          ${team.indexOf(player.id) < 4 ? `<button class="small-btn captain-btn ${captain === player.id ? 'selected' : ''}" type="button" onclick="setFantasyCaptain('${player.id}')">${captain === player.id ? 'Captain' : 'Make captain'}</button>` : ''}
-          <button class="small-btn" type="button" onclick="removePlayerFromTeam('${player.id}')">Remove</button>
-        </div>
-      </div>
-    `).join('');
+      `).join('');
+    }
   }
 
   document.querySelectorAll('[data-slot]').forEach((slot) => {
     const slotIndex = Number(slot.dataset.slot);
     const player = getPlayerById(team[slotIndex]);
     slot.innerHTML = player ? `
-      <button class="shirt-player" type="button" onclick="removePlayerFromSlot(${slotIndex})" aria-label="Remove ${player.name}">
+      <button class="shirt-player" type="button" draggable="true" ondragstart="startFantasySlotDrag(event, ${slotIndex})" onclick="openPlayerDetails('${player.id}')" aria-label="View ${player.name} profile">
         <span class="shirt-wrap">
           <span class="team-shirt" style="--shirt-color: ${player.teamColor || '#00f0ff'}"></span>
           ${captain === player.id ? '<span class="court-captain-badge">C</span>' : ''}
@@ -879,8 +959,41 @@ function renderBuildBoard() {
         <small>${slotIndex === 4 ? 'Substitute' : 'Starter'} · ${player.team || 'Team unknown'} · ${getPlayerFantasyPoints(player)} pts</small>
       </button>
     ` : `<button class="add-slot" type="button" onclick="openPlayerPicker(${slotIndex})" aria-label="Add ${slotIndex === 4 ? 'substitute' : 'starter'}"><span>+</span><small>${slotIndex === 4 ? 'Add substitute' : 'Add player'}</small></button>`;
+    slot.ondragover = (event) => {
+      event.preventDefault();
+      if (!transfersAreLocked()) slot.classList.add('is-drag-target');
+    };
+    slot.ondragleave = () => slot.classList.remove('is-drag-target');
+    slot.ondrop = (event) => {
+      event.preventDefault();
+      slot.classList.remove('is-drag-target');
+      dropFantasySlot(event, slotIndex);
+    };
   });
 }
+
+window.startFantasySlotDrag = function (event, slotIndex) {
+  if (!ensureFantasyLogin() || transfersAreLocked()) {
+    event.preventDefault();
+    return;
+  }
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('text/plain', String(slotIndex));
+};
+
+window.dropFantasySlot = function (event, targetIndex) {
+  if (!ensureFantasyLogin() || transfersAreLocked()) {
+    showTransferLockMessage();
+    return;
+  }
+  const sourceIndex = Number(event.dataTransfer.getData('text/plain'));
+  if (!Number.isInteger(sourceIndex) || sourceIndex === targetIndex) return;
+  const team = Array.from({ length: FANTASY_TEAM_SIZE }, (_, index) => getStoredFantasyTeam()[index] || null);
+  [team[sourceIndex], team[targetIndex]] = [team[targetIndex], team[sourceIndex]];
+  saveFantasyTeam(team);
+  renderBuildBoard();
+  saveActiveFantasyTransfer();
+};
 
 function openPlayerPicker(slotIndex) {
   if (!ensureFantasyLogin()) return;
@@ -1173,6 +1286,48 @@ async function renderLeaderboard() {
   } catch (error) {
     table.innerHTML = '<tbody><tr><td colspan="4">Unable to load rankings right now.</td></tr></tbody>';
   }
+  renderMatchdaySnapshots();
+}
+
+function renderMatchdaySnapshots(selectedMatchdayId) {
+  const selector = document.getElementById('snapshot-matchday-select');
+  const details = document.getElementById('snapshot-details');
+  if (!selector || !details) return;
+  const currentUser = getCurrentFantasyUser();
+  const snapshots = getOrderedFantasyMatchdays().filter((matchday) => matchday.status === 'ended' && matchday.managerSnapshots);
+  if (!currentUser) {
+    selector.innerHTML = '<option value="">Sign in to view your snapshots</option>';
+    selector.disabled = true;
+    details.innerHTML = '<p class="empty-state">Sign in to view the squad and powerups you used in previous matchdays.</p>';
+    return;
+  }
+  if (snapshots.length === 0) {
+    selector.innerHTML = '<option value="">No completed matchdays</option>';
+    selector.disabled = true;
+    details.innerHTML = '<p class="empty-state">Snapshots will appear when a matchday ends.</p>';
+    return;
+  }
+  const activeSnapshot = snapshots.find((matchday) => String(matchday.id) === String(selectedMatchdayId)) || snapshots.at(-1);
+  selector.disabled = false;
+  selector.innerHTML = snapshots.map((matchday) => `<option value="${matchday.id}" ${matchday.id === activeSnapshot.id ? 'selected' : ''}>${matchday.name}</option>`).join('');
+  const snapshot = activeSnapshot.managerSnapshots[currentUser.username.toLowerCase()];
+  if (!snapshot) {
+    details.innerHTML = `<p class="empty-state">No snapshot was recorded for your team in ${activeSnapshot.name}.</p>`;
+  } else {
+    const captain = getPlayerById(snapshot.fantasyCaptain);
+    const powerups = Object.keys(snapshot.fantasyPowerups || {}).map((powerup) => powerup === 'tripleCaptain' ? 'Triple Captain' : 'Unlimited Transfers');
+    details.innerHTML = `
+      <div class="snapshot-heading"><strong>${activeSnapshot.name}</strong><span>Captain: ${captain?.name || 'Not selected'}</span></div>
+      <ul class="snapshot-player-list">
+        ${snapshot.fantasyTeam.map((playerId, index) => {
+          const player = getPlayerById(playerId);
+          return player ? `<li><span>${player.name}</span><small>${index < FANTASY_STARTER_COUNT ? 'Starter' : 'Substitute'}${player.id === snapshot.fantasyCaptain ? ' · Captain' : ''}</small></li>` : '';
+        }).join('')}
+      </ul>
+      <p class="snapshot-powerups"><strong>Powerups used:</strong> ${powerups.length ? powerups.join(' · ') : 'None'}</p>
+    `;
+  }
+  selector.onchange = (event) => renderMatchdaySnapshots(event.target.value);
 }
 
 function renderPlayersTable() {
@@ -1185,15 +1340,17 @@ function renderPlayersTable() {
     { key: 'team', label: 'Team', type: 'text' },
     { key: 'value', label: 'Value', type: 'number' },
     { key: 'form', label: 'Form', type: 'number' },
-    { key: 'goals', label: 'Goals', type: 'number' },
-    { key: 'ownGoals', label: 'Own Goals', type: 'number' },
+    { key: 'goals', label: 'G', type: 'number' },
+    { key: 'ownGoals', label: 'OG', type: 'number' },
     { key: 'mvps', label: 'MVPs', type: 'number' },
     { key: 'fantasyPoints', label: 'Fantasy Pts', type: 'number' },
     { key: 'selectionPercentage', label: 'Selected By', type: 'number' },
-    { key: 'ownershipTrend', label: 'Ownership Trend', type: 'number' }
+    { key: 'ownershipTrend', label: 'Ownership Trend', type: 'number' },
+    { key: 'fixtureDifficulty', label: 'Next Fixture', type: 'number' }
   ];
   const selectionStats = new Map(FANTASY_PLAYERS.map((player) => [player.id, getPlayerSelectionStats(player.id)]));
   const ownershipTrends = new Map(FANTASY_PLAYERS.map((player) => [player.id, getFantasyOwnershipTrend(player.id)]));
+  const nextFixtures = new Map(FANTASY_PLAYERS.map((player) => [player.id, getFantasyNextFixture(player)]));
   const sortedPlayers = [...FANTASY_PLAYERS];
   if (playerStatsSort.key) {
     const column = columns.find(({ key }) => key === playerStatsSort.key);
@@ -1210,7 +1367,8 @@ function renderPlayersTable() {
         mvps: Number(player.mvps) || 0,
         fantasyPoints: getPlayerFantasyPoints(player),
         selectionPercentage: stats.percentage,
-        ownershipTrend: ownershipTrends.get(player.id) || 0
+        ownershipTrend: ownershipTrends.get(player.id) || 0,
+        fixtureDifficulty: nextFixtures.get(player.id) ? getFantasyFixtureDifficulty(nextFixtures.get(player.id).opponent) : 0
       }[column.key]);
       const leftValue = getValue(left, leftStats);
       const rightValue = getValue(right, rightStats);
@@ -1236,7 +1394,7 @@ function renderPlayersTable() {
       ${sortedPlayers.map((player) => `
         <tr class="player-table-row" onclick="openPlayerDetails('${player.id}')" tabindex="0" onkeydown="if(event.key === 'Enter' || event.key === ' ') openPlayerDetails('${player.id}')">
           <td>${player.name}</td>
-          <td><span class="table-team"><img src="${getTeamLogoPath(player.team)}" alt="" loading="lazy" onerror="this.remove()">${player.team || 'Unknown team'}</span></td>
+          <td><span class="table-team" title="${player.team || 'Unknown team'}"><img src="${getTeamLogoPath(player.team)}" alt="${player.team || 'Unknown team'}" loading="lazy" onerror="this.remove()"></span></td>
           <td>${formatMoney(player.value)}</td>
           <td>${formatPlayerForm(player)}</td>
           <td>${player.goals}</td>
@@ -1245,8 +1403,11 @@ function renderPlayersTable() {
           <td>${getPlayerFantasyPoints(player)}</td>
           <td><strong>${selectionStats.get(player.id).percentage}%</strong><small class="selection-rate-count">${selectionStats.get(player.id).selectedCount}/${managerCount} managers</small></td>
           <td>${ownershipTrends.get(player.id) === null
-            ? '<span class="ownership-trend neutral">No previous</span>'
+            ? '<span class="ownership-trend neutral">-</span>'
             : `<strong class="ownership-trend ${ownershipTrends.get(player.id) > 0 ? 'up' : ownershipTrends.get(player.id) < 0 ? 'down' : 'neutral'}">${ownershipTrends.get(player.id) > 0 ? '+' : ''}${ownershipTrends.get(player.id)}%</strong><small class="selection-rate-count">this matchday</small>`}</td>
+          <td>${nextFixtures.get(player.id)
+            ? `<span class="next-fixture-logo" title="${nextFixtures.get(player.id).opponent}"><img src="${getTeamLogoPath(nextFixtures.get(player.id).opponent)}" alt="${nextFixtures.get(player.id).opponent}" loading="lazy" onerror="this.remove()"><small class="fixture-difficulty difficulty-${getFantasyFixtureDifficulty(nextFixtures.get(player.id).opponent)}">${getFantasyFixtureDifficulty(nextFixtures.get(player.id).opponent)}/5</small></span>`
+            : '<span class="ownership-trend neutral">No fixture</span>'}</td>
         </tr>
       `).join('')}
     </tbody>
@@ -1282,9 +1443,18 @@ function openPlayerDetails(playerId) {
   const recentPoints = getPlayerMatchPoints(player).slice(-5);
   const trend = recentPoints.length ? recentPoints.map((points) => `<span>${points}</span>`).join('') : '<span class="detail-empty">No matchday points yet</span>';
   const fixtureMarkup = fixtures.length
-    ? fixtures.slice(0, 6).map((fixture) => `<div class="fixture-card"><small>${fixture.gameweek || 'Next'}</small><div class="fixture-teams"><span><img src="${getTeamLogoPath(player.team)}" alt="" loading="lazy" onerror="this.remove()">${player.team || 'TBC'}</span><b>vs</b><span><img src="${getTeamLogoPath(fixture.opponent)}" alt="" loading="lazy" onerror="this.remove()">${fixture.opponent || 'TBC'}</span></div></div>`).join('')
+    ? fixtures.slice(0, 6).map((fixture) => `<div class="fixture-card"><small>${fixture.gameweek || 'Next'} · Difficulty ${getFantasyFixtureDifficulty(fixture.opponent)}/5</small><div class="fixture-teams"><span><img src="${getTeamLogoPath(player.team)}" alt="" loading="lazy" onerror="this.remove()">${player.team || 'TBC'}</span><b>vs</b><span><img src="${getTeamLogoPath(fixture.opponent)}" alt="" loading="lazy" onerror="this.remove()">${fixture.opponent || 'TBC'}</span></div></div>`).join('')
     : '<p class="detail-empty">Fixtures will appear when matchday schedules are added.</p>';
   const photoPath = getPlayerPhotoPath(player);
+  const selectedTeam = getStoredFantasyTeam();
+  const selectedIndex = selectedTeam.indexOf(player.id);
+  const selectedInBuild = document.body.dataset.page === 'build' && selectedIndex >= 0;
+  const changesAvailable = selectedInBuild && !transfersAreLocked();
+  const profileActions = selectedInBuild && changesAvailable
+    ? `<button class="primary-btn" type="button" onclick="setFantasyCaptain('${player.id}'); document.getElementById('player-detail-overlay').hidden = true" ${selectedIndex >= FANTASY_STARTER_COUNT ? 'disabled' : ''}>${selectedIndex >= FANTASY_STARTER_COUNT ? 'Starter only' : getStoredFantasyCaptain() === player.id ? 'Captain' : 'Make Captain'}</button><button class="secondary-btn" type="button" onclick="document.getElementById('player-detail-overlay').hidden = true; removePlayerFromTeam('${player.id}')">Remove from team</button>`
+    : document.body.dataset.page === 'build'
+      ? '<button class="secondary-btn" type="button" onclick="document.getElementById(\'player-detail-overlay\').hidden = true">Close</button>'
+      : '<a class="primary-btn" href="fantasy-build.html">Add to squad <span aria-hidden="true">&nearr;</span></a><button class="secondary-btn" type="button" onclick="document.getElementById(\'player-detail-overlay\').hidden = true">Close</button>';
 
   content.innerHTML = `
     <div class="detail-hero" style="--shirt-color: ${player.teamColor || '#00f0ff'}">
@@ -1299,8 +1469,7 @@ function openPlayerDetails(playerId) {
       </div>
     </div>
     <div class="detail-actions">
-      <a class="primary-btn" href="fantasy-build.html">Add to squad <span aria-hidden="true">&nearr;</span></a>
-      <button class="secondary-btn" type="button" onclick="document.getElementById('player-detail-overlay').hidden = true">Close</button>
+      ${profileActions}
     </div>
     <div class="detail-price-line"><span>Price</span><strong>${formatMoney(player.value)}</strong><em>${getPlayerPriceStatus(player)}</em></div>
     <div class="detail-metrics">
@@ -1534,8 +1703,17 @@ async function endFantasyMatchday() {
   if (!isFantasyAdmin() || !selected || selected.status !== 'active') return;
   const db = await getFantasyDb();
   const users = { ...(db.users || {}) };
+  const managerSnapshots = Object.fromEntries(Object.entries(users)
+    .filter(([, user]) => getFantasyTeamPlayerIds(user).length === FANTASY_TEAM_SIZE)
+    .map(([accountKey, user]) => [accountKey, {
+      username: user.username || accountKey,
+      fantasyTeam: getFantasyTeamPlayerIds(user),
+      fantasyCaptain: user.fantasyCaptain || null,
+      fantasyPowerups: Object.fromEntries(Object.entries(user.fantasyPowerups || {})
+        .filter(([, powerup]) => powerup?.used && String(powerup.matchdayId) === String(selected.id)))
+    }]));
   const endedMatchdays = fantasyMatchdays.map((matchday) => matchday.id === selected.id
-    ? { ...matchday, status: 'ended', endedAt: new Date().toISOString() }
+    ? { ...matchday, status: 'ended', endedAt: new Date().toISOString(), managerSnapshots }
     : matchday);
   fantasyMatchdays = endedMatchdays;
   fantasyMatchday = null;
