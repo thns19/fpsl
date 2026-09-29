@@ -25,8 +25,22 @@ function getPlayerAvailability(playerId, matchdayId = viewedFantasyMatchdayId) {
   const availability = matchday?.playerAvailability?.[playerId];
   if (!availability || !['injured', 'unavailable'].includes(availability.status)) return null;
   return availability.status === 'unavailable'
-    ? { status: 'unavailable', chance: Math.max(0, Math.min(100, Number(availability.chance ?? 100) || 0)) }
+    ? {
+      status: 'unavailable',
+      chance: Math.max(0, Math.min(100, Number(availability.chance ?? 100) || 0)),
+      reason: String(availability.reason || '').trim()
+    }
     : { status: 'injured' };
+}
+
+function escapeFantasyHtml(value) {
+  return String(value).replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  })[character]);
 }
 
 function getPlayerAvailabilityBadge(player) {
@@ -35,7 +49,9 @@ function getPlayerAvailabilityBadge(player) {
   if (availability.status === 'injured') {
     return '<span class="availability-badge injured" role="img" aria-label="Injured" title="Injured this matchday">&times;</span>';
   }
-  return `<span class="availability-badge unavailable" role="img" aria-label="Unavailable, ${availability.chance}% chance" title="${availability.chance}% chance of unavailability"><span aria-hidden="true">&#9888;</span><small>${availability.chance}%</small></span>`;
+  const reason = availability.reason ? ` Reason: ${availability.reason}` : '';
+  const accessibleReason = escapeFantasyHtml(reason);
+  return `<span class="availability-badge unavailable" role="img" aria-label="Unavailable, ${availability.chance}% chance.${accessibleReason}" title="${availability.chance}% chance of unavailability.${accessibleReason}"><span aria-hidden="true">&#9888;</span><small>${availability.chance}%</small></span>`;
 }
 
 function formatPlayerForm(player) {
@@ -214,7 +230,8 @@ const FANTASY_TEAM_DIFFICULTY = {
   Ksades: 1,
   'Midi Kidz': 2,
   'Air Condition': 2,
-  EX7T: 1
+  EX7T: 1,
+  Hitters: 2
 };
 
 function getFantasyFixtureDifficulty(team) {
@@ -1198,12 +1215,16 @@ function openPlayerPicker(slotIndex) {
   const team = getFantasyBuilderTeam();
   const selected = team[slotIndex];
   document.getElementById('player-picker-title').textContent = slotIndex === 4 ? 'Choose substitute' : `Choose starter ${slotIndex + 1}`;
-  list.innerHTML = FANTASY_PLAYERS.filter((player) => !team.includes(player.id) || player.id === selected).map((player) => `
-    <button class="picker-player" type="button" onclick="selectPlayerForSlot('${player.id}', ${slotIndex})">
-      <span class="team-shirt mini-shirt" style="--shirt-color: ${player.teamColor || '#00f0ff'}"></span>
-      <span><strong>${player.name} ${getPlayerAvailabilityBadge(player)}</strong><small>${player.team || 'Team unknown'} · ${formatMoney(player.value)} · ${getPlayerMatchdayPoints(player)} pts</small></span>
-    </button>
-  `).join('') || '<p class="empty-state">All players are already in your squad.</p>';
+  list.innerHTML = FANTASY_PLAYERS.filter((player) => !team.includes(player.id) || player.id === selected).map((player) => {
+    const availability = getPlayerAvailability(player.id);
+    const reason = availability?.reason ? `<small class="availability-reason-copy">${escapeFantasyHtml(availability.reason)}</small>` : '';
+    return `
+      <button class="picker-player" type="button" onclick="selectPlayerForSlot('${player.id}', ${slotIndex})">
+        <span class="team-shirt mini-shirt" style="--shirt-color: ${player.teamColor || '#00f0ff'}"></span>
+        <span><strong>${player.name} ${getPlayerAvailabilityBadge(player)}</strong><small>${player.team || 'Team unknown'} · ${formatMoney(player.value)} · ${getPlayerMatchdayPoints(player)} pts</small>${reason}</span>
+      </button>
+    `;
+  }).join('') || '<p class="empty-state">All players are already in your squad.</p>';
   picker.hidden = false;
 }
 
@@ -1798,6 +1819,10 @@ function openPlayerDetails(playerId) {
   const name = formatPlayerName(player);
   const fixtures = getFantasyPlayerFixtures(player);
   const recentPoints = getPlayerMatchPoints(player).slice(-5);
+  const availability = getPlayerAvailability(player.id);
+  const availabilityReason = availability?.reason
+    ? `<p class="availability-reason-copy">${escapeFantasyHtml(availability.reason)}</p>`
+    : '';
   const trend = recentPoints.length ? recentPoints.map((points) => `<span>${points}</span>`).join('') : '<span class="detail-empty">No matchday points yet</span>';
   const fixtureMarkup = fixtures.length
     ? fixtures.slice(0, 6).map((fixture) => `<div class="fixture-card"><small>${fixture.gameweek || 'Next'} · Difficulty ${getFantasyFixtureDifficulty(fixture.opponent)}/5</small><div class="fixture-teams"><span><img src="${getTeamLogoPath(player.team)}" alt="" loading="lazy" onerror="this.remove()">${player.team || 'TBC'}</span><b>vs</b><span><img src="${getTeamLogoPath(fixture.opponent)}" alt="" loading="lazy" onerror="this.remove()">${fixture.opponent || 'TBC'}</span></div></div>`).join('')
@@ -1821,6 +1846,7 @@ function openPlayerDetails(playerId) {
       </div>
       <div class="detail-identity">
         <p>${player.position || 'Player'}${player.team ? ` · ${player.team}` : ''} ${getPlayerAvailabilityBadge(player)}</p>
+        ${availabilityReason}
         <h2 id="player-detail-name">${name.first}<br><strong>${name.last}</strong></h2>
         <span>${formatMoney(player.value)}</span>
       </div>
@@ -1944,16 +1970,24 @@ function renderAdminPlayers() {
       <label class="availability-chance-field" ${status !== 'unavailable' ? 'hidden' : ''}>Chance (%)
         <input type="number" min="0" max="100" step="1" value="${chance}" data-availability-chance ${status !== 'unavailable' ? 'disabled' : ''}>
       </label>
+      <label class="availability-reason-field" ${status !== 'unavailable' ? 'hidden' : ''}>Reason
+        <input type="text" maxlength="120" placeholder="e.g. Work commitments" data-availability-reason ${status !== 'unavailable' ? 'disabled' : ''}>
+      </label>
     </div>
     `;
   }).join('');
+  container.querySelectorAll('.admin-player-row').forEach((row) => {
+    row.querySelector('[data-availability-reason]').value = selectedAvailability[row.dataset.playerId]?.reason || '';
+  });
   container.querySelectorAll('[data-availability-status]').forEach((select) => {
     select.addEventListener('change', () => {
-      const chanceField = select.closest('.admin-player-row').querySelector('.availability-chance-field');
-      const chanceInput = chanceField.querySelector('[data-availability-chance]');
+      const row = select.closest('.admin-player-row');
       const isUnavailable = select.value === 'unavailable';
-      chanceField.hidden = !isUnavailable;
-      chanceInput.disabled = !isUnavailable;
+      ['.availability-chance-field', '.availability-reason-field'].forEach((selector) => {
+        const field = row.querySelector(selector);
+        field.hidden = !isUnavailable;
+        field.querySelector('input').disabled = !isUnavailable;
+      });
     });
   });
 }
@@ -2206,7 +2240,12 @@ async function saveFantasyPlayerStats() {
     } else if (availabilityStatus === 'unavailable') {
       const chanceValue = row.querySelector('[data-availability-chance]')?.value.trim();
       const chance = chanceValue === '' ? 100 : Number(chanceValue);
-      playerAvailability[playerId] = { status: 'unavailable', chance: Math.max(0, Math.min(100, Number.isFinite(chance) ? chance : 100)) };
+      const reason = row.querySelector('[data-availability-reason]')?.value.trim() || '';
+      playerAvailability[playerId] = {
+        status: 'unavailable',
+        chance: Math.max(0, Math.min(100, Number.isFinite(chance) ? chance : 100)),
+        ...(reason ? { reason } : {})
+      };
     } else {
       delete playerAvailability[playerId];
     }

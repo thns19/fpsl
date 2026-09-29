@@ -415,7 +415,7 @@ button, input, select { font: inherit; }
 
 .admin-player-row {
   display: grid;
-  grid-template-columns: minmax(170px, 1fr) repeat(6, minmax(100px, 0.7fr));
+  grid-template-columns: minmax(170px, 1fr) repeat(7, minmax(100px, 0.7fr));
   align-items: end;
   gap: 10px;
   padding: 12px;
@@ -460,6 +460,13 @@ button, input, select { font: inherit; }
 
 .availability-badge small { font-size: 0.62rem; }
 .player-name-cell { display: inline-flex; align-items: center; gap: 6px; }
+.availability-reason-copy {
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0;
+  line-height: 1.35;
+  text-transform: none;
+}
 
 @media (max-width: 760px) {
   .admin-player-row {

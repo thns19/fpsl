@@ -42,6 +42,9 @@ const FANTASY_PLAYERS = [
   { id: 'sokratis-gkiolias-jr', name: 'Sokratis Gkiolias Jr', team: 'EX7T', teamColor: '#fff0a3', value: 4.0, lastFiveMatches: [], goals: 0, ownGoals: 0, mvps: 0 },
   { id: 'stavros-moutaftsidis', name: 'Stavros Moutaftsidis', team: 'Midi Kidz', teamColor: '#7d1823', value: 4.0, lastFiveMatches: [], goals: 0, ownGoals: 0, mvps: 0 },
   { id: 'petros-papaspyropoulos', name: 'Petros Papaspyropoulos', team: 'Spasmena Mila', teamColor: 'linear-gradient(135deg, #d63838 0 50%, #fff 50%)', value: 5.5, lastFiveMatches: [], goals: 0, ownGoals: 0, mvps: 0 },
+  { id: 'iro-ganti', name: 'Iro Ganti', team: 'Hitters', teamColor: 'linear-gradient(135deg, #FF99E7 0 50%, #FFE3F8 50%)', value: 4.5, lastFiveMatches: [], goals: 0, ownGoals: 0, mvps: 0 },
+  { id: 'theofania-sotiropoulou', name: 'Theofania Sotiropoulou', team: 'Hitters', teamColor: 'linear-gradient(135deg, #FF99E7 0 50%, #FFE3F8 50%)', value: 4.5, lastFiveMatches: [], goals: 0, ownGoals: 0, mvps: 0 },
+  { id: 'polixeni-toussi', name: 'Polixeni Toussi', team: 'Hitters', teamColor: 'linear-gradient(135deg, #FF99E7 0 50%, #FFE3F8 50%)', value: 5.0, lastFiveMatches: [], goals: 0, ownGoals: 0, mvps: 0 },
 ];
 
 const FANTASY_FIXTURES = [
@@ -77,19 +80,19 @@ const FANTASY_FIXTURES = [
   { group: 'Group B', md: 5, h: 'R1', a: 'Ksades' },
   { group: 'Group C', md: 1, h: 'Axtarm', a: 'Niki A.' },
   { group: 'Group C', md: 1, h: 'Thryloi', a: 'GB' },
-  { group: 'Group C', md: 1, h: 'Mila', a: 'Warriors' },
+  { group: 'Group C', md: 1, h: 'Mila', a: 'Hitters' },
   { group: 'Group C', md: 2, h: 'GB', a: 'Axtarm' },
-  { group: 'Group C', md: 2, h: 'Warriors', a: 'Niki A.' },
+  { group: 'Group C', md: 2, h: 'Hitters', a: 'Niki A.' },
   { group: 'Group C', md: 2, h: 'Mila', a: 'Thryloi' },
-  { group: 'Group C', md: 3, h: 'Axtarm', a: 'Warriors' },
+  { group: 'Group C', md: 3, h: 'Axtarm', a: 'Hitters' },
   { group: 'Group C', md: 3, h: 'GB', a: 'Mila' },
   { group: 'Group C', md: 3, h: 'Niki A.', a: 'Thryloi' },
   { group: 'Group C', md: 4, h: 'Mila', a: 'Axtarm' },
-  { group: 'Group C', md: 4, h: 'Thryloi', a: 'Warriors' },
+  { group: 'Group C', md: 4, h: 'Thryloi', a: 'Hitters' },
   { group: 'Group C', md: 4, h: 'Niki A.', a: 'GB' },
   { group: 'Group C', md: 5, h: 'Axtarm', a: 'Thryloi' },
   { group: 'Group C', md: 5, h: 'Mila', a: 'Niki A.' },
-  { group: 'Group C', md: 5, h: 'Warriors', a: 'GB' }
+  { group: 'Group C', md: 5, h: 'Hitters', a: 'GB' }
 ];
 
 const FANTASY_TEAM_ALIASES = {
@@ -212,7 +215,8 @@ function getTeamLogoPath(team) {
     'Team Till Death': 'ttd.png',
     'Thryloi': 'thryloi.png',
     'Volos Drummers': 'volos.png',
-    'Warriors': 'warriors.png'
+    'Warriors': 'warriors.png',
+    'Hitters': 'hitters.png'
   };
   if (logoFiles[team]) return `logos/${logoFiles[team]}`;
   const slug = String(team || '')
