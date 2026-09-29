@@ -433,7 +433,7 @@ const PSL_DB_URL = 'https://ptchbl4-default-rtdb.europe-west1.firebasedatabase.a
 const PSL_ADMIN = 'pitchball';
 let _pslDbCache = null, _pslDbFetching = null;
 async function pslDbGet(){if(_pslDbCache)return _pslDbCache;if(_pslDbFetching)return _pslDbFetching;_pslDbFetching=fetch(PSL_DB_URL).then(r=>r.json()).then(data=>{_pslDbCache=data;_pslDbFetching=null;return _pslDbCache;});return _pslDbFetching;}
-async function pslDbSet(data){_pslDbCache=data;await fetch(PSL_DB_URL,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});}
+async function pslDbSet(data){const latestResponse=await fetch(PSL_DB_URL);if(!latestResponse.ok)throw new Error('Unable to save account.');const latest=await latestResponse.json()||{};const latestUsers=latest.users||{};const newAccount=Object.entries(data.users||{}).find(([key])=>!latestUsers[key]);if(!newAccount)throw new Error('Account already exists or could not be saved.');const [username,account]=newAccount;const response=await fetch(PSL_DB_URL.replace('/.json',`/users/${encodeURIComponent(username)}.json`),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(account)});if(!response.ok)throw new Error('Unable to save account.');_pslDbCache={...latest,users:{...latestUsers,[username]:account}};}
 function pslDbInvalidate(){_pslDbCache=null;}
 let pslCurrentUser=null;
 function pslLoadSession(){const s=localStorage.getItem('psl_session');return s?JSON.parse(s):null;}

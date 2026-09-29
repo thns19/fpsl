@@ -40,7 +40,8 @@ const FANTASY_PLAYERS = [
   { id: 'markos-kanellidis', name: 'Markos Kanellidis', team: 'Golden B.', teamColor: '#e2b93b', value: 4.0, lastFiveMatches: [], goals: 0, ownGoals: 0, mvps: 0 },
   { id: 'orfeas-maragkos', name: 'Orfeas Maragkos', team: 'Niki Alimou', teamColor: '#176b3a', value: 4.0, lastFiveMatches: [], goals: 0, ownGoals: 0, mvps: 0 },
   { id: 'sokratis-gkiolias-jr', name: 'Sokratis Gkiolias Jr', team: 'EX7T', teamColor: '#fff0a3', value: 4.0, lastFiveMatches: [], goals: 0, ownGoals: 0, mvps: 0 },
-  { id: 'stavros-moutaftsidis', name: 'Stavros Moutaftsidis', team: 'Midi Kidz', teamColor: '#7d1823', value: 4.0, lastFiveMatches: [], goals: 0, ownGoals: 0, mvps: 0 }
+  { id: 'stavros-moutaftsidis', name: 'Stavros Moutaftsidis', team: 'Midi Kidz', teamColor: '#7d1823', value: 4.0, lastFiveMatches: [], goals: 0, ownGoals: 0, mvps: 0 },
+  { id: 'petros-papaspyropoulos', name: 'Petros Papaspyropoulos', team: 'Spasmena Mila', teamColor: 'linear-gradient(135deg, #d63838 0 50%, #fff 50%)', value: 5.5, lastFiveMatches: [], goals: 0, ownGoals: 0, mvps: 0 },
 ];
 
 const FANTASY_FIXTURES = [
@@ -124,6 +125,7 @@ const FANTASY_STARTER_COUNT = 4;
 const FANTASY_SUB_COUNT = 1;
 
 const FANTASY_STORAGE_KEY = 'pitchballFantasyTeam';
+const FANTASY_MATCHDAY_SQUADS_KEY = 'pitchballFantasyMatchdaySquads';
 const FANTASY_SESSION_KEY = 'psl_session';
 
 function getFantasyUserStorageKey(suffix) {
@@ -223,45 +225,131 @@ function getTeamLogoPath(team) {
   return slug ? `logos/${slug}.png` : '';
 }
 
-function getStoredFantasyTeam() {
+function getFantasyStorageMatchdayId(matchdayId) {
+  if (matchdayId !== undefined && matchdayId !== null) return String(matchdayId);
+  const draft = typeof getFantasyDraftMatchday === 'function' ? getFantasyDraftMatchday() : null;
+  const active = typeof fantasyMatchday !== 'undefined' ? fantasyMatchday : null;
+  return String(draft?.id ?? active?.id ?? 'draft');
+}
+
+function getStoredFantasyMatchdaySquads() {
   try {
     const user = getCurrentFantasyUser();
-    if (!user) return [];
-    const raw = localStorage.getItem(getFantasyUserStorageKey(FANTASY_STORAGE_KEY));
-    return raw ? JSON.parse(raw) : [];
+    if (!user) return {};
+    const raw = localStorage.getItem(getFantasyUserStorageKey(FANTASY_MATCHDAY_SQUADS_KEY));
+    const squads = raw ? JSON.parse(raw) : {};
+    return squads && typeof squads === 'object' && !Array.isArray(squads) ? squads : {};
   } catch (error) {
-    return [];
+    return {};
   }
 }
 
-function saveFantasyTeam(team) {
+function getStoredFantasyMatchdaySquad(matchdayId) {
+  const id = getFantasyStorageMatchdayId(matchdayId);
+  const localSquad = getStoredFantasyMatchdaySquads()[id];
+  const account = typeof fantasyAccount !== 'undefined' ? fantasyAccount : null;
+  const accountSquad = account?.fantasyMatchdaySquads?.[id];
+  if (localSquad || accountSquad) return { ...(accountSquad || {}), ...(localSquad || {}) };
+
+  const allSquads = { ...(account?.fantasyMatchdaySquads || {}), ...getStoredFantasyMatchdaySquads() };
+  const priorId = Object.keys(allSquads)
+    .filter((squadId) => squadId !== 'draft' && Number(squadId) < Number(id) && allSquads[squadId]?.fantasyTeam)
+    .sort((left, right) => Number(right) - Number(left))[0];
+  if (priorId) return { ...allSquads[priorId] };
+  if (!Object.keys(allSquads).some((squadId) => squadId !== 'draft') && allSquads.draft) {
+    return { ...allSquads.draft };
+  }
+
+  try {
+    const user = getCurrentFantasyUser();
+    if (!user) return null;
+    const rawTeam = localStorage.getItem(getFantasyUserStorageKey(FANTASY_STORAGE_KEY));
+    const team = rawTeam ? JSON.parse(rawTeam) : account?.fantasyTeam;
+    if (!Array.isArray(team)) return null;
+    const rawCaptain = localStorage.getItem(getFantasyUserStorageKey('pitchballFantasyCaptain'));
+    return {
+      fantasyTeam: team,
+      fantasyCaptain: rawCaptain || account?.fantasyCaptain || null,
+      fantasyBudget: account?.fantasyBudget,
+      fantasyPriceSnapshot: account?.fantasyPriceSnapshot
+    };
+  } catch (error) {
+    return null;
+  }
+}
+
+function getStoredFantasyTeam(matchdayId) {
+  return getStoredFantasyMatchdaySquad(matchdayId)?.fantasyTeam || [];
+}
+
+function saveFantasyTeam(team, matchdayId) {
   const user = getCurrentFantasyUser();
   if (user) {
-    localStorage.setItem(getFantasyUserStorageKey(FANTASY_STORAGE_KEY), JSON.stringify(team));
+    const id = getFantasyStorageMatchdayId(matchdayId);
+    const squads = getStoredFantasyMatchdaySquads();
+    squads[id] = { ...(getStoredFantasyMatchdaySquad(id) || {}), fantasyTeam: team };
+    localStorage.setItem(getFantasyUserStorageKey(FANTASY_MATCHDAY_SQUADS_KEY), JSON.stringify(squads));
   }
 }
 
-function getStoredFantasyCaptain() {
-  return localStorage.getItem(getFantasyUserStorageKey('pitchballFantasyCaptain')) || null;
+function getStoredFantasyCaptain(matchdayId) {
+  const squad = getStoredFantasyMatchdaySquad(matchdayId);
+  return squad?.fantasyCaptain || null;
 }
 
-function saveFantasyCaptain(playerId) {
-  const key = getFantasyUserStorageKey('pitchballFantasyCaptain');
-  if (playerId) localStorage.setItem(key, playerId);
-  else localStorage.removeItem(key);
+function saveFantasyCaptain(playerId, matchdayId) {
+  const user = getCurrentFantasyUser();
+  if (!user) return;
+  const id = getFantasyStorageMatchdayId(matchdayId);
+  const squads = getStoredFantasyMatchdaySquads();
+  squads[id] = { ...(getStoredFantasyMatchdaySquad(id) || {}), fantasyCaptain: playerId || null };
+  localStorage.setItem(getFantasyUserStorageKey(FANTASY_MATCHDAY_SQUADS_KEY), JSON.stringify(squads));
 }
 
-function getFantasySubmissionState() {
+function getFantasySubmissionState(matchdayId) {
   try {
+    const id = getFantasyStorageMatchdayId(matchdayId);
     const raw = localStorage.getItem(getFantasyUserStorageKey('pitchballFantasySubmission'));
-    return raw ? JSON.parse(raw) : null;
+    const saved = raw ? JSON.parse(raw) : null;
+    if (saved && String(saved.matchdayId) === id) return saved;
+    if (saved && typeof saved === 'object' && saved[id]) return saved[id];
+    const account = typeof fantasyAccount !== 'undefined' ? fantasyAccount : null;
+    const squad = account?.fantasyMatchdaySquads?.[id];
+    if (squad?.submitted || squad?.transfersUsed !== undefined) {
+      return {
+        ...squad,
+        matchdayId: id,
+        transfersUsed: Number(squad.transfersUsed) || 0,
+        transferPenalty: Number(squad.transferPenalty) || 0
+      };
+    }
+    if (String(account?.fantasySubmittedMatchdayId) === id) {
+      return {
+        matchdayId: id,
+        transfersUsed: Number(account.fantasyTransfersUsed) || 0,
+        transferPenalty: Number(account.fantasyTransferPenalty) || 0
+      };
+    }
+    return null;
   } catch (error) {
     return null;
   }
 }
 
 function saveFantasySubmissionState(state) {
-  localStorage.setItem(getFantasyUserStorageKey('pitchballFantasySubmission'), JSON.stringify(state));
+  const id = getFantasyStorageMatchdayId(state?.matchdayId);
+  const key = getFantasyUserStorageKey('pitchballFantasySubmission');
+  let states = {};
+  try {
+    const saved = JSON.parse(localStorage.getItem(key) || 'null');
+    if (saved && typeof saved === 'object' && !Array.isArray(saved)) {
+      states = saved.matchdayId !== undefined ? { [String(saved.matchdayId)]: saved } : saved;
+    }
+  } catch (error) {
+    states = {};
+  }
+  states[id] = { ...state, matchdayId: id };
+  localStorage.setItem(key, JSON.stringify(states));
 }
 
 function getCurrentFantasyUser() {

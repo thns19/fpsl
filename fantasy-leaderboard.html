@@ -53,6 +53,22 @@
     </section>
   </div>
 
+  <div id="manager-team-overlay" class="player-detail-overlay" hidden>
+    <article class="player-detail-modal manager-team-modal" role="dialog" aria-modal="true" aria-labelledby="manager-team-title">
+      <button id="close-manager-team" class="detail-close" type="button" aria-label="Close team preview">&times;</button>
+      <div class="manager-team-header">
+        <div>
+          <p class="section-title">Manager squad</p>
+          <h2 id="manager-team-title"></h2>
+        </div>
+        <label class="snapshot-select-label">Matchday
+          <select id="manager-team-matchday"></select>
+        </label>
+      </div>
+      <div id="manager-team-details" class="snapshot-details"></div>
+    </article>
+  </div>
+
   <div id="fantasy-auth-overlay" class="auth-overlay">
     <div class="auth-modal">
       <div class="auth-modal-header">

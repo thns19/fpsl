@@ -233,7 +233,8 @@ button, input, select { font: inherit; }
 
 .admin-controls input,
 .admin-controls select,
-.admin-player-row input {
+.admin-player-row input,
+.admin-player-row select {
   min-width: 110px;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -414,7 +415,7 @@ button, input, select { font: inherit; }
 
 .admin-player-row {
   display: grid;
-  grid-template-columns: minmax(170px, 1fr) repeat(4, minmax(100px, 0.7fr));
+  grid-template-columns: minmax(170px, 1fr) repeat(6, minmax(100px, 0.7fr));
   align-items: end;
   gap: 10px;
   padding: 12px;
@@ -426,6 +427,39 @@ button, input, select { font: inherit; }
 .admin-player-row strong {
   padding-bottom: 10px;
 }
+
+.availability-chance-field[hidden] { display: none; }
+
+.availability-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.availability-badge.injured {
+  border: 1px solid rgba(255,95,95,0.55);
+  background: rgba(255,55,75,0.18);
+  color: #ff5f68;
+}
+
+.availability-badge.unavailable {
+  border: 1px solid rgba(255,209,102,0.55);
+  background: rgba(255,209,102,0.16);
+  color: #ffd166;
+}
+
+.availability-badge small { font-size: 0.62rem; }
+.player-name-cell { display: inline-flex; align-items: center; gap: 6px; }
 
 @media (max-width: 760px) {
   .admin-player-row {
@@ -880,6 +914,38 @@ h1 span {
 }
 
 .shirt-player:active { cursor: grabbing; }
+
+.slot-player-card {
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  width: 100%;
+}
+
+.slot-player-actions {
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+}
+
+.slot-action-btn {
+  padding: 3px 7px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: rgba(0,0,0,0.2);
+  color: var(--text);
+  font-size: 0.68rem;
+  cursor: pointer;
+}
+
+.slot-action-btn:hover { border-color: var(--cyan); }
+
+.slot-action-btn:disabled,
+.add-slot:disabled,
+.captain-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 
 .court-slot.is-drag-target,
 .bench-slot.is-drag-target {
@@ -1635,11 +1701,7 @@ tr:last-child td {
 }
 
 .build-matchdays {
-  margin-top: 18px;
-  padding: 18px;
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  background: rgba(255,255,255,0.03);
+  margin: 0 0 18px;
 }
 .build-powerup-bar {
   margin-top: 14px;
@@ -1890,4 +1952,39 @@ tr:last-child td {
   .detail-identity h2 strong { font-size: 1.5rem; }
   .fixture-grid { grid-template-columns: repeat(3, 1fr); }
   .detail-actions { flex-direction: column; }
+}
+
+.manager-name-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--cyan);
+  font: inherit;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.manager-name-button:hover { color: var(--text); }
+
+.manager-team-modal {
+  width: min(100%, 580px);
+  padding: 24px;
+}
+
+.manager-team-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding-right: 44px;
+}
+
+.manager-team-header h2 { margin: 0; }
+.manager-team-header .snapshot-select-label { margin-top: 0; }
+
+@media (max-width: 520px) {
+  .manager-team-header { flex-direction: column; gap: 12px; }
+  .manager-team-header .snapshot-select-label { width: 100%; max-width: none; }
 }
