@@ -1828,7 +1828,9 @@ function renderPlayersTable() {
         <tr class="player-table-row" onclick="openPlayerDetails('${player.id}')" tabindex="0" onkeydown="if(event.key === 'Enter' || event.key === ' ') openPlayerDetails('${player.id}')">
           <td><span class="player-name-cell">${player.name} ${getPlayerAvailabilityBadge(player)}</span></td>
           <td><span class="table-team" title="${player.team || 'Unknown team'}"><img src="${getTeamLogoPath(player.team)}" alt="${player.team || 'Unknown team'}" loading="lazy" onerror="this.remove()"></span></td>
-          <td>${formatMoney(player.value)}</td>
+          <td>${formatMoney(player.value)}${player.priceTrend
+            ? `<small class="price-trend ${getPlayerPriceStatus(player) === 'Likely to rise' ? 'rising' : getPlayerPriceStatus(player) === 'Likely to fall' ? 'falling' : ''}">${getPlayerPriceStatus(player)}</small>`
+            : ''}</td>
           <td>${formatPlayerForm(player)}</td>
           <td>${player.goals}</td>
           <td>${player.ownGoals}</td>
