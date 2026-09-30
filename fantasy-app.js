@@ -127,6 +127,25 @@ function getFantasyMatchdaySquad(user, matchdayId) {
       || getOrderedFantasyMatchdays().find((item) => item.status === 'draft');
     if (String(currentMatchday?.id) === String(matchdayId)) return user || null;
   }
+  const orderedMatchdays = getOrderedFantasyMatchdays();
+  const targetIndex = orderedMatchdays.findIndex((item) => String(item.id) === String(matchdayId));
+  if (targetIndex >= 0) {
+    const accountKey = String(user?.username || '').toLowerCase();
+    for (const previousMatchday of orderedMatchdays.slice(0, targetIndex).reverse()) {
+      const snapshot = previousMatchday.managerSnapshots?.[accountKey];
+      if (snapshot && (Array.isArray(snapshot.fantasyTeam) || snapshot.fantasyTeam && typeof snapshot.fantasyTeam === 'object')) {
+        return { ...snapshot, fantasyPowerups: {}, transferPenalty: 0 };
+      }
+      const previousSquad = user?.fantasyMatchdaySquads?.[String(previousMatchday.id)];
+      if (Array.isArray(previousSquad?.fantasyTeam) || previousSquad?.fantasyTeam && typeof previousSquad.fantasyTeam === 'object') {
+        return { ...previousSquad, fantasyPowerups: {}, transferPenalty: 0 };
+      }
+    }
+    const submittedIndex = orderedMatchdays.findIndex((item) => String(item.id) === String(user?.fantasySubmittedMatchdayId));
+    if (submittedIndex >= 0 && submittedIndex < targetIndex && Array.isArray(user?.fantasyTeam)) {
+      return { ...user, fantasyPowerups: {}, fantasyTransferPenalty: 0, transferPenalty: 0 };
+    }
+  }
   return null;
 }
 
@@ -239,7 +258,19 @@ function getFantasyFixtureDifficulty(team) {
 }
 
 function getFantasyNextFixture(player) {
-  return getFantasyPlayerFixtures(player)[0] || null;
+  const matchdays = getOrderedFantasyMatchdays();
+  const activeIndex = matchdays.findIndex((matchday) => matchday.status === 'active');
+  const draftIndex = matchdays.findIndex((matchday) => matchday.status === 'draft');
+  const lastEndedIndex = matchdays.map((matchday) => matchday.status).lastIndexOf('ended');
+  const nextMatchdayNumber = activeIndex >= 0
+    ? activeIndex + 1
+    : draftIndex >= 0
+      ? draftIndex + 1
+      : lastEndedIndex >= 0
+        ? lastEndedIndex + 2
+        : 1;
+  return getFantasyPlayerFixtures(player)
+    .find((fixture) => fixture.gameweek === `Matchday ${nextMatchdayNumber}`) || null;
 }
 
 async function getFantasyDb() {
@@ -2144,7 +2175,10 @@ async function endFantasyMatchday() {
   if (!isFantasyAdmin() || !selected || selected.status !== 'active') return;
   const db = await getFantasyDb();
   const users = { ...(db.users || {}) };
-  const managerSnapshots = selected.managerSnapshots || buildFantasyManagerSnapshots(users, selected.id);
+  const managerSnapshots = {
+    ...buildFantasyManagerSnapshots(users, selected.id),
+    ...(selected.managerSnapshots || {})
+  };
   const endedMatchdays = fantasyMatchdays.map((matchday) => matchday.id === selected.id
     ? { ...matchday, status: 'ended', endedAt: new Date().toISOString(), managerSnapshots }
     : matchday);
