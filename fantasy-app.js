@@ -70,6 +70,7 @@ let viewedFantasyMatchdayId = null;
 let fantasyAccount = null;
 let fantasyUsers = {};
 let playerStatsSort = { key: null, direction: 1 };
+let leaderboardSort = { key: 'total', direction: -1 };
 let squadCountdownTimer = null;
 
 function getDateTimeLocalValue(value) {
@@ -1565,20 +1566,33 @@ async function renderLeaderboard() {
         return {
           accountKey,
           user,
-          username: user.username,
+          username: user.username || accountKey,
           total,
           lastPoints
         };
-      })
-      .sort((a, b) => b.total - a.total);
+      });
+    rows.sort((left, right) => {
+      const leftValue = left[leaderboardSort.key];
+      const rightValue = right[leaderboardSort.key];
+      const comparison = leaderboardSort.key === 'username'
+        ? String(leftValue).localeCompare(String(rightValue))
+        : Number(leftValue) - Number(rightValue);
+      return comparison * leaderboardSort.direction || right.total - left.total || left.username.localeCompare(right.username);
+    });
 
     table.innerHTML = `
       <thead>
         <tr>
           <th>Rank</th>
-          <th>Manager</th>
-          <th>Last MD Points</th>
-          <th>Total</th>
+          ${[
+            { key: 'username', label: 'Manager' },
+            { key: 'lastPoints', label: 'Last MD Points' },
+            { key: 'total', label: 'Total' }
+          ].map(({ key, label }) => {
+            const active = leaderboardSort.key === key;
+            const direction = active ? (leaderboardSort.direction === 1 ? 'asc' : 'desc') : '';
+            return `<th aria-sort="${active ? direction : 'none'}"><button class="table-sort-button" type="button" data-leaderboard-sort="${key}">${label}<span class="table-sort-indicator">${direction}</span></button></th>`;
+          }).join('')}
         </tr>
       </thead>
       <tbody>
@@ -1597,6 +1611,16 @@ async function renderLeaderboard() {
       if (!entry) return;
       button.textContent = `${entry.username}${currentUser && entry.username === currentUser.username ? ' (You)' : ''}`;
       button.addEventListener('click', () => openManagerTeamPreview(entry));
+    });
+    table.querySelectorAll('[data-leaderboard-sort]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const key = button.dataset.leaderboardSort;
+        leaderboardSort = {
+          key,
+          direction: leaderboardSort.key === key ? leaderboardSort.direction * -1 : key === 'username' ? 1 : -1
+        };
+        renderLeaderboard();
+      });
     });
   } catch (error) {
     table.innerHTML = '<tbody><tr><td colspan="4">Unable to load rankings right now.</td></tr></tbody>';
