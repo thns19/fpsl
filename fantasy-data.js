@@ -142,7 +142,7 @@ function getPlayerById(playerId) {
 
 function getPlayerPriceStatus(player) {
   const trend = String(player?.priceTrend || 'stable').toLowerCase();
-  if (trend.includes('rise') || trend.includes('up')) return 'Likely to rise';
+  if (trend === 'rising' || trend.includes('rise') || trend.includes('up')) return 'Likely to rise';
   if (trend.includes('fall') || trend.includes('down') || trend.includes('drop')) return 'Likely to fall';
   return 'Price stable';
 }
