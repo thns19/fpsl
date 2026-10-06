@@ -1238,6 +1238,24 @@ h1 span {
   border-radius: 9px;
 }
 
+.manager-preview-player-list li { align-items: center; }
+
+.manager-player-identity {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.manager-player-identity > span { overflow-wrap: anywhere; }
+.manager-player-identity small { line-height: 1.35; }
+
+.manager-player-points {
+  flex: 0 0 auto;
+  color: var(--text);
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
 .snapshot-powerups { margin: 12px 0 0; }
 
 .selected-list {

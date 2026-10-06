@@ -333,7 +333,14 @@ async function loadFantasyState() {
     });
     if (autoCaptainsChanged) {
       db = { ...db, users: usersWithAutoCaptains };
-      saveFantasyDb(db).catch(() => {});
+    }
+    const usersWithUpdatedScores = { ...(db.users || {}) };
+    const scoresChanged = recalculateManagerTotals(usersWithUpdatedScores, fantasyMatchdays);
+    if (scoresChanged || autoCaptainsChanged) {
+      db = { ...db, users: usersWithUpdatedScores };
+      fantasyUsers = usersWithUpdatedScores;
+      fantasyAccount = currentUser ? usersWithUpdatedScores[currentUser.username.toLowerCase()] || null : null;
+      await saveFantasyDb(db).catch(() => {});
     }
     if (currentUser && fantasyAccount) fantasyUsers[currentUser.username.toLowerCase()] = fantasyAccount;
     applyAggregatedPlayerStats(fantasyMatchdays);
@@ -371,25 +378,36 @@ function applyAggregatedPlayerStats(matchdays) {
 }
 
 function recalculateManagerTotals(users, matchdays) {
+  const endedMatchdays = matchdays.filter((matchday) => matchday.status === 'ended');
+  const lastMatchday = getOrderedFantasyMatchdays().filter((matchday) => matchday.status === 'ended').at(-1);
+  let changed = false;
   Object.keys(users).forEach((accountKey) => {
     const user = users[accountKey];
     if (!Array.isArray(user.fantasyTeam)) return;
-    const fantasyPoints = matchdays
-      .filter((matchday) => matchday.status === 'ended')
-      .reduce((total, matchday) => {
-        const savedPoints = user.fantasyMatchdayPoints?.[matchday.id];
-        const points = savedPoints === undefined
-          ? calculateFantasyManagerPoints(user, matchday)
-          : Number(savedPoints) || 0;
-        return total + points;
-      }, 0);
-    const lastMatchday = getOrderedFantasyMatchdays().filter((matchday) => matchday.status === 'ended').at(-1);
+    const fantasyMatchdayPoints = { ...(user.fantasyMatchdayPoints || {}) };
+    const fantasyPoints = endedMatchdays.reduce((total, matchday) => {
+      const squad = matchday.managerSnapshots?.[accountKey] || getFantasyMatchdaySquad(user, matchday.id);
+      const points = calculateFantasyTeamPoints(
+        squad?.fantasyTeam,
+        squad?.fantasyCaptain,
+        matchday,
+        squad?.fantasyPowerups,
+        squad?.transferPenalty
+      );
+      fantasyMatchdayPoints[matchday.id] = points;
+      if (Number(user.fantasyMatchdayPoints?.[matchday.id]) !== points) changed = true;
+      return total + points;
+    }, 0);
+    const lastMatchdayId = lastMatchday?.id || 0;
+    if (Number(user.fantasyPoints) !== fantasyPoints || String(user.matchday ?? '') !== String(lastMatchdayId)) changed = true;
     users[accountKey] = {
       ...user,
+      fantasyMatchdayPoints,
       fantasyPoints,
-      matchday: lastMatchday?.id || 0
+      matchday: lastMatchdayId
     };
   });
+  return changed;
 }
 
 function isFantasyPowerupActive(powerups, powerupName, matchdayId) {
@@ -411,22 +429,40 @@ function areFantasyPowerupsAvailable(matchday = getFantasyPowerupTargetMatchday(
   return Boolean(matchday && Number(matchday.id) >= FANTASY_POWERUPS_START_MATCHDAY_ID);
 }
 
+function getFantasySubstitution(team, matchday) {
+  if (matchday?.status !== 'ended') return null;
+  const players = Array.isArray(team) ? team.filter(Boolean) : [];
+  const substituteId = players[FANTASY_STARTER_COUNT];
+  if (!substituteId) return null;
+
+  const starterPoints = players.slice(0, FANTASY_STARTER_COUNT).map((playerId) => ({
+    playerId,
+    points: Number(matchday.playerStats?.[playerId]?.matchdayPoints) || 0
+  }));
+  const lowestStarter = starterPoints.reduce((lowest, player) => player.points < lowest.points ? player : lowest, starterPoints[0]);
+  const substitutePoints = Number(matchday.playerStats?.[substituteId]?.matchdayPoints) || 0;
+  if (!lowestStarter || lowestStarter.points > 0 || substitutePoints <= 0) return null;
+
+  return { playerId: substituteId, replacedPlayerId: lowestStarter.playerId };
+}
+
 function calculateFantasyTeamPoints(team, captain, matchday, powerups, transferPenalty = 0) {
   const players = Array.isArray(team) ? team.filter(Boolean) : [];
   const starters = players.slice(0, FANTASY_STARTER_COUNT);
-  const substitute = players[FANTASY_STARTER_COUNT];
   const starterPoints = starters.map((playerId) => ({
     playerId,
     points: Number(matchday?.playerStats?.[playerId]?.matchdayPoints) || 0
   }));
-  const lowestStarter = starterPoints.reduce((lowest, player) => player.points < lowest.points ? player : lowest, starterPoints[0]);
   const scoringPlayers = starterPoints.slice();
-
-  if (matchday?.status === 'ended' && substitute && lowestStarter && lowestStarter.points <= 0) {
-    scoringPlayers.splice(scoringPlayers.indexOf(lowestStarter), 1, {
-      playerId: substitute,
-      points: Number(matchday.playerStats?.[substitute]?.matchdayPoints) || 0
-    });
+  const substitution = getFantasySubstitution(players, matchday);
+  if (substitution) {
+    const replacedPlayerIndex = scoringPlayers.findIndex((player) => player.playerId === substitution.replacedPlayerId);
+    if (replacedPlayerIndex >= 0) {
+      scoringPlayers.splice(replacedPlayerIndex, 1, {
+        playerId: substitution.playerId,
+        points: Number(matchday.playerStats?.[substitution.playerId]?.matchdayPoints) || 0
+      });
+    }
   }
 
   const captainMultiplier = isFantasyPowerupActive(powerups, 'tripleCaptain', matchday?.id) ? 3 : 2;
@@ -1701,16 +1737,31 @@ function renderManagerTeamPreviewDetails(entry, matchday, details) {
   heading.append(matchdayName, captainName);
 
   const playerList = document.createElement('ul');
-  playerList.className = 'snapshot-player-list';
+  playerList.className = 'snapshot-player-list manager-preview-player-list';
+  const substitution = getFantasySubstitution(team, matchday);
+  const replacedPlayer = getPlayerById(substitution?.replacedPlayerId);
   team.forEach((playerId, index) => {
     const player = getPlayerById(playerId);
     if (!player) return;
     const item = document.createElement('li');
+    const identity = document.createElement('div');
+    identity.className = 'manager-player-identity';
     const playerName = document.createElement('span');
     playerName.textContent = player.name;
     const role = document.createElement('small');
-    role.textContent = `${index < FANTASY_STARTER_COUNT ? 'Starter' : 'Substitute'}${player.id === squad?.fantasyCaptain ? ' · Captain' : ''}`;
-    item.append(playerName, role);
+    const roleLabel = index < FANTASY_STARTER_COUNT ? 'Starter' : 'Substitute';
+    const captainLabel = player.id === squad?.fantasyCaptain ? ' · Captain' : '';
+    const substitutionLabel = matchday.status === 'ended' && index === FANTASY_STARTER_COUNT
+      ? substitution
+        ? ` · Came on for ${replacedPlayer?.name || 'a starter'}`
+        : ' · Did not come on'
+      : '';
+    role.textContent = `${roleLabel}${captainLabel}${substitutionLabel}`;
+    identity.append(playerName, role);
+    const playerPoints = document.createElement('strong');
+    playerPoints.className = 'manager-player-points';
+    playerPoints.textContent = `${Number(matchday.playerStats?.[playerId]?.matchdayPoints) || 0} pts`;
+    item.append(identity, playerPoints);
     playerList.append(item);
   });
 
