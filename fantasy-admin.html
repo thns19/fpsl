@@ -87,6 +87,25 @@
       <section class="panel admin-section">
         <div class="section-header">
           <div>
+            <p class="section-title">Account controls</p>
+            <h2>Leaderboard visibility</h2>
+          </div>
+        </div>
+        <div class="admin-account-controls">
+          <label class="admin-team-select-label">Account
+            <select id="admin-account-select"></select>
+          </label>
+          <label class="admin-account-exclusion">
+            <input id="admin-leaderboard-excluded" type="checkbox" />
+            Exclude from leaderboard
+          </label>
+        </div>
+        <p id="admin-account-exclusion-status" class="admin-help" aria-live="polite"></p>
+      </section>
+
+      <section class="panel admin-section">
+        <div class="section-header">
+          <div>
             <p class="section-title">Player stats</p>
             <h2>Edit matchday results</h2>
           </div>

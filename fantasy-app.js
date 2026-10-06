@@ -441,7 +441,7 @@ function getFantasySubstitution(team, matchday) {
   }));
   const lowestStarter = starterPoints.reduce((lowest, player) => player.points < lowest.points ? player : lowest, starterPoints[0]);
   const substitutePoints = Number(matchday.playerStats?.[substituteId]?.matchdayPoints) || 0;
-  if (!lowestStarter || lowestStarter.points > 0 || substitutePoints <= 0) return null;
+  if (!lowestStarter || lowestStarter.points > 0 || substitutePoints <= lowestStarter.points) return null;
 
   return { playerId: substituteId, replacedPlayerId: lowestStarter.playerId };
 }
@@ -1179,7 +1179,7 @@ function renderBuildBoard() {
   if (teamRankLabel) {
     const currentUser = getCurrentFantasyUser();
     const rankRows = viewedMatchday && viewedMatchday.status !== 'draft'
-      ? getSubmittedFantasyUsers().map((user) => ({
+      ? getSubmittedFantasyUsers().filter((user) => !user.leaderboardExcluded).map((user) => ({
         username: user.username,
         points: user.fantasyMatchdayPoints?.[viewedMatchday.id] !== undefined
           ? Number(user.fantasyMatchdayPoints[viewedMatchday.id]) || 0
@@ -1586,7 +1586,7 @@ async function renderLeaderboard() {
     const matchdayForLastPoints = orderedMatchdays.find((matchday) => matchday.status === 'active')
       || orderedMatchdays.filter((matchday) => matchday.status === 'ended').at(-1);
     const rows = Object.entries(db.users || {})
-      .filter(([, user]) => Array.isArray(user.fantasyTeam) && user.fantasyTeam.length === FANTASY_TEAM_SIZE)
+      .filter(([, user]) => !user.leaderboardExcluded && Array.isArray(user.fantasyTeam) && user.fantasyTeam.length === FANTASY_TEAM_SIZE)
       .map(([accountKey, user]) => {
         const savedPoints = user.fantasyMatchdayPoints || {};
         const total = orderedMatchdays
@@ -2142,6 +2142,55 @@ function renderAdminTeams(selectedUsername) {
   `;
 }
 
+function renderAdminAccounts(selectedAccountKey) {
+  const selector = document.getElementById('admin-account-select');
+  const excludedToggle = document.getElementById('admin-leaderboard-excluded');
+  const status = document.getElementById('admin-account-exclusion-status');
+  if (!selector || !excludedToggle || !status) return;
+
+  const accounts = Object.entries(fantasyUsers || {})
+    .sort((left, right) => String(left[1].username || left[0]).localeCompare(String(right[1].username || right[0])));
+  selector.replaceChildren();
+  accounts.forEach(([accountKey, account]) => {
+    const option = document.createElement('option');
+    option.value = accountKey;
+    option.textContent = account.username || accountKey;
+    selector.append(option);
+  });
+
+  const activeAccount = accounts.find(([accountKey]) => accountKey === selectedAccountKey) || accounts[0];
+  selector.disabled = !activeAccount;
+  excludedToggle.disabled = !activeAccount;
+  if (!activeAccount) {
+    excludedToggle.checked = false;
+    status.textContent = 'No accounts are available.';
+    return;
+  }
+
+  selector.value = activeAccount[0];
+  excludedToggle.checked = Boolean(activeAccount[1].leaderboardExcluded);
+  status.textContent = excludedToggle.checked
+    ? 'This account is hidden from leaderboard rankings.'
+    : 'This account is included in leaderboard rankings when eligible.';
+}
+
+async function saveLeaderboardExclusion(accountKey, excluded) {
+  if (!isFantasyAdmin() || !accountKey) return;
+  const db = await getFantasyDb();
+  const account = db.users?.[accountKey];
+  if (!account) throw new Error('The selected account could not be found.');
+
+  const users = {
+    ...(db.users || {}),
+    [accountKey]: { ...account, leaderboardExcluded: excluded }
+  };
+  await saveFantasyDb({ ...db, users });
+  fantasyUsers = users;
+  const currentUser = getCurrentFantasyUser();
+  if (currentUser?.username.toLowerCase() === accountKey) fantasyAccount = users[accountKey];
+  renderAdminAccounts(accountKey);
+}
+
 function buildFantasyManagerSnapshots(users, matchdayId) {
   return Object.fromEntries(Object.entries(users || {})
     .filter(([, user]) => getFantasyTeamPlayerIds(user, matchdayId).length === FANTASY_TEAM_SIZE)
@@ -2386,6 +2435,7 @@ function initAdminPage() {
   renderAdminState();
   renderAdminPlayers();
   renderAdminTeams();
+  renderAdminAccounts();
   document.getElementById('admin-matchday-select')?.addEventListener('change', (event) => {
     selectedFantasyMatchdayId = Number(event.target.value) || null;
     renderAdminState();
@@ -2394,6 +2444,16 @@ function initAdminPage() {
   });
   document.getElementById('admin-team-select')?.addEventListener('change', (event) => {
     renderAdminTeams(event.target.value);
+  });
+  document.getElementById('admin-account-select')?.addEventListener('change', (event) => {
+    renderAdminAccounts(event.target.value);
+  });
+  document.getElementById('admin-leaderboard-excluded')?.addEventListener('change', (event) => {
+    const accountKey = document.getElementById('admin-account-select')?.value;
+    saveLeaderboardExclusion(accountKey, event.target.checked).catch((error) => {
+      renderAdminAccounts(accountKey);
+      alert(error.message || 'Unable to update leaderboard visibility.');
+    });
   });
   document.getElementById('admin-create-matchday')?.addEventListener('click', () => createFantasyMatchday().catch((error) => alert(error.message)));
   document.getElementById('admin-save-matchday-settings')?.addEventListener('click', () => saveFantasyMatchdaySettings().catch((error) => alert(error.message)));
