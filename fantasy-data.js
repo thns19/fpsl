@@ -47,79 +47,81 @@ const FANTASY_PLAYERS = [
   { id: 'polixeni-toussi', priceTrend: 'stable', value: 5.1, name: 'Polixeni Toussi', team: 'Hitters', teamColor: 'linear-gradient(135deg, #FF99E7 0 50%, #FFE3F8 50%)', lastFiveMatches: [], goals: 0, ownGoals: 0, mvps: 0 },
 ];
 
-const FANTASY_FIXTURES = [
-  { group: 'Group A', md: 1, h: 'EX7T', a: 'Midi' },
-  { group: 'Group A', md: 1, h: 'Hornets', a: 'BAD' },
-  { group: 'Group A', md: 1, h: 'TTD', a: 'Volos' },
-  { group: 'Group A', md: 2, h: 'BAD', a: 'EX7T' },
-  { group: 'Group A', md: 2, h: 'Volos', a: 'Midi' },
-  { group: 'Group A', md: 2, h: 'TTD', a: 'Hornets' },
-  { group: 'Group A', md: 3, h: 'EX7T', a: 'Volos' },
-  { group: 'Group A', md: 3, h: 'BAD', a: 'TTD' },
-  { group: 'Group A', md: 3, h: 'Midi', a: 'Hornets' },
-  { group: 'Group A', md: 4, h: 'TTD', a: 'EX7T' },
-  { group: 'Group A', md: 4, h: 'Hornets', a: 'Volos' },
-  { group: 'Group A', md: 4, h: 'Midi', a: 'BAD' },
-  { group: 'Group A', md: 5, h: 'EX7T', a: 'Hornets' },
-  { group: 'Group A', md: 5, h: 'TTD', a: 'Midi' },
-  { group: 'Group A', md: 5, h: 'Volos', a: 'BAD' },
-  { group: 'Group B', md: 1, h: 'Lampater', a: 'Polo' },
-  { group: 'Group B', md: 1, h: 'A/C', a: 'Ksades' },
-  { group: 'Group B', md: 1, h: 'BMB', a: 'R1' },
-  { group: 'Group B', md: 2, h: 'Ksades', a: 'Lampater' },
-  { group: 'Group B', md: 2, h: 'R1', a: 'Polo' },
-  { group: 'Group B', md: 2, h: 'BMB', a: 'A/C' },
-  { group: 'Group B', md: 3, h: 'Lampater', a: 'R1' },
-  { group: 'Group B', md: 3, h: 'Ksades', a: 'BMB' },
-  { group: 'Group B', md: 3, h: 'Polo', a: 'A/C' },
-  { group: 'Group B', md: 4, h: 'BMB', a: 'Lampater' },
-  { group: 'Group B', md: 4, h: 'A/C', a: 'R1' },
-  { group: 'Group B', md: 4, h: 'Polo', a: 'Ksades' },
-  { group: 'Group B', md: 5, h: 'Lampater', a: 'A/C' },
-  { group: 'Group B', md: 5, h: 'BMB', a: 'Polo' },
-  { group: 'Group B', md: 5, h: 'R1', a: 'Ksades' },
-  { group: 'Group C', md: 1, h: 'Axtarm', a: 'Niki A.' },
-  { group: 'Group C', md: 1, h: 'Thryloi', a: 'GB' },
-  { group: 'Group C', md: 1, h: 'Mila', a: 'Hitters' },
-  { group: 'Group C', md: 2, h: 'GB', a: 'Axtarm' },
-  { group: 'Group C', md: 2, h: 'Hitters', a: 'Niki A.' },
-  { group: 'Group C', md: 2, h: 'Mila', a: 'Thryloi' },
-  { group: 'Group C', md: 3, h: 'Axtarm', a: 'Hitters' },
-  { group: 'Group C', md: 3, h: 'GB', a: 'Mila' },
-  { group: 'Group C', md: 3, h: 'Niki A.', a: 'Thryloi' },
-  { group: 'Group C', md: 4, h: 'Mila', a: 'Axtarm' },
-  { group: 'Group C', md: 4, h: 'Thryloi', a: 'Hitters' },
-  { group: 'Group C', md: 4, h: 'Niki A.', a: 'GB' },
-  { group: 'Group C', md: 5, h: 'Axtarm', a: 'Thryloi' },
-  { group: 'Group C', md: 5, h: 'Mila', a: 'Niki A.' },
-  { group: 'Group C', md: 5, h: 'Hitters', a: 'GB' }
+const FANTASY_GROUP_STAGE_FIXTURES = [
+  { md: 1, h: 'EX7T', a: 'Midi Kidz' },
+  { md: 1, h: 'Hornets', a: 'BADiles' },
+  { md: 1, h: 'Team Till Death', a: 'Volos Drummers' },
+  { md: 2, h: 'BADiles', a: 'EX7T' },
+  { md: 2, h: 'Volos Drummers', a: 'Midi Kidz' },
+  { md: 2, h: 'Team Till Death', a: 'Hornets' },
+  { md: 3, h: 'EX7T', a: 'Volos Drummers' },
+  { md: 3, h: 'BADiles', a: 'Team Till Death' },
+  { md: 3, h: 'Midi Kidz', a: 'Hornets' },
+  { md: 4, h: 'Team Till Death', a: 'EX7T' },
+  { md: 4, h: 'Hornets', a: 'Volos Drummers' },
+  { md: 4, h: 'Midi Kidz', a: 'BADiles' },
+  { md: 5, h: 'EX7T', a: 'Hornets' },
+  { md: 5, h: 'Team Till Death', a: 'Midi Kidz' },
+  { md: 5, h: 'Volos Drummers', a: 'BADiles' },
+  { md: 1, h: 'Lampater', a: 'Polo' },
+  { md: 1, h: 'Air Condition', a: 'Ksades' },
+  { md: 1, h: 'Basement Boys', a: 'R1' },
+  { md: 2, h: 'Ksades', a: 'Lampater' },
+  { md: 2, h: 'R1', a: 'Polo' },
+  { md: 2, h: 'Basement Boys', a: 'Air Condition' },
+  { md: 3, h: 'Lampater', a: 'R1' },
+  { md: 3, h: 'Ksades', a: 'Basement Boys' },
+  { md: 3, h: 'Polo', a: 'Air Condition' },
+  { md: 4, h: 'Basement Boys', a: 'Lampater' },
+  { md: 4, h: 'Air Condition', a: 'R1' },
+  { md: 4, h: 'Polo', a: 'Ksades' },
+  { md: 5, h: 'Lampater', a: 'Air Condition' },
+  { md: 5, h: 'Basement Boys', a: 'Polo' },
+  { md: 5, h: 'R1', a: 'Ksades' },
+  { md: 1, h: 'Axtarmades', a: 'Niki Alimou' },
+  { md: 1, h: 'Thryloi', a: 'Golden B.' },
+  { md: 1, h: 'Spasmena Mila', a: 'Hitters' },
+  { md: 2, h: 'Golden B.', a: 'Axtarmades' },
+  { md: 2, h: 'Hitters', a: 'Niki Alimou' },
+  { md: 2, h: 'Spasmena Mila', a: 'Thryloi' },
+  { md: 3, h: 'Axtarmades', a: 'Hitters' },
+  { md: 3, h: 'Golden B.', a: 'Spasmena Mila' },
+  { md: 3, h: 'Niki Alimou', a: 'Thryloi' },
+  { md: 4, h: 'Spasmena Mila', a: 'Axtarmades' },
+  { md: 4, h: 'Thryloi', a: 'Hitters' },
+  { md: 4, h: 'Niki Alimou', a: 'Golden B.' },
+  { md: 5, h: 'Axtarmades', a: 'Thryloi' },
+  { md: 5, h: 'Spasmena Mila', a: 'Niki Alimou' },
+  { md: 5, h: 'Hitters', a: 'Golden B.' }
 ];
 
-const FANTASY_TEAM_ALIASES = {
-  BAD: 'BADiles',
-  Midi: 'Midi Kidz',
-  TTD: 'Team Till Death',
-  Volos: 'Volos Drummers',
-  'A/C': 'Air Condition',
-  BMB: 'Basement Boys',
-  Axtarm: 'Axtarmades',
-  'Niki A.': 'Niki Alimou',
-  Mila: 'Spasmena Mila',
-  GB: 'Golden B.'
-};
+const FANTASY_CUP_ROUNDS = ['Round of 32', 'Round of 16', 'Quarter-finals', 'Semi-finals', 'Final'];
+let FANTASY_FIXTURES = [];
 
 function getFantasyPlayerFixtures(player) {
   if (!player?.team) return [];
-  return FANTASY_FIXTURES
-    .filter((fixture) => FANTASY_TEAM_ALIASES[fixture.h] === player.team || FANTASY_TEAM_ALIASES[fixture.a] === player.team || fixture.h === player.team || fixture.a === player.team)
-    .map((fixture) => {
-      const home = (FANTASY_TEAM_ALIASES[fixture.h] || fixture.h) === player.team;
-      return {
-        gameweek: `Matchday ${fixture.md}`,
-        opponent: home ? (FANTASY_TEAM_ALIASES[fixture.a] || fixture.a) : (FANTASY_TEAM_ALIASES[fixture.h] || fixture.h),
-        home
-      };
-    });
+  const teamFixtures = FANTASY_FIXTURES.filter((fixture) => fixture.h === player.team || fixture.a === player.team);
+  const mapFixture = (fixture) => {
+    const home = fixture.h === player.team;
+    return {
+      gameweek: fixture.gameweek,
+      opponent: home ? fixture.a : fixture.h,
+      home,
+      completed: fixture.completed,
+      blank: false
+    };
+  };
+  const cupFixtures = FANTASY_CUP_ROUNDS.map((round) => {
+    const fixture = teamFixtures.find((item) => item.competition === 'PSL Cup' && item.round === round);
+    return fixture
+      ? mapFixture(fixture)
+      : { gameweek: `PSL Cup · ${round}`, opponent: '', home: false, completed: true, blank: true };
+  });
+  return [
+    ...teamFixtures.filter((fixture) => fixture.competition === 'PSL6 Group Stage').map(mapFixture),
+    ...cupFixtures,
+    ...teamFixtures.filter((fixture) => fixture.competition === 'League Phase').map(mapFixture)
+  ];
 }
 
 const FANTASY_TEAM_LIMIT = 40.0;

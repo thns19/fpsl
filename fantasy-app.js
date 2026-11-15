@@ -12,7 +12,7 @@ function getPlayerForm(player) {
 }
 
 function getPlayerFantasyPoints(player) {
-  return getPlayerMatchPoints(player).reduce((total, pointsInMatch) => total + pointsInMatch, 0);
+  return Number(player.seasonPoints) || 0;
 }
 
 function getPlayerMatchdayPoints(player, matchdayId = viewedFantasyMatchdayId) {
@@ -72,6 +72,7 @@ let fantasyUsers = {};
 let playerStatsSort = { key: null, direction: 1 };
 let leaderboardSort = { key: 'total', direction: -1 };
 let squadCountdownTimer = null;
+let pitchballFixturesUnavailable = false;
 
 function getDateTimeLocalValue(value) {
   if (!value) return '';
@@ -258,20 +259,130 @@ function getFantasyFixtureDifficulty(team) {
   return FANTASY_TEAM_DIFFICULTY[team] || 3;
 }
 
+function parsePitchballAssignment(html, name) {
+  const assignment = html.match(new RegExp(`\\b(?:const|let|var)\\s+${name}\\s*=\\s*(\\{[\\s\\S]*?\\}|\\[[\\s\\S]*?\\]);`));
+  if (!assignment) throw new Error(`Pitchball's ${name} data was not found.`);
+  const json = assignment[1].replace(/([{,]\s*)([A-Za-z_$][\w$]*)\s*:/g, '$1"$2":');
+  return JSON.parse(json);
+}
+
+function normalizePitchballTeamName(team) {
+  if (team === 'Oi Thryloi') return 'Thryloi';
+  if (team === 'Golden Bullet') return 'Golden B.';
+  return team;
+}
+
+function buildPitchballCupFixtures(cup) {
+  const rounds = [
+    { name: 'Round of 32', matches: 16, offset: 0 },
+    { name: 'Round of 16', matches: 8, offset: 16 },
+    { name: 'Quarter-finals', matches: 4, offset: 24 },
+    { name: 'Semi-finals', matches: 2, offset: 28 },
+    { name: 'Final', matches: 1, offset: 30 }
+  ];
+  if (!Array.isArray(cup?.participants) || cup.participants.length !== 32) {
+    throw new Error('Pitchball did not provide all 32 PSL Cup bracket slots.');
+  }
+
+  const fixtures = [];
+  let entrants = cup.participants.slice();
+  rounds.forEach((round) => {
+    const advancingTeams = [];
+    for (let index = 0; index < round.matches; index += 1) {
+      const home = entrants[index * 2];
+      const away = entrants[index * 2 + 1];
+      const teams = [home, away].filter((team) => team && String(team).toLowerCase() !== 'bye');
+      const matchId = `PSL6CUP${String(round.offset + index + 1).padStart(3, '0')}`;
+      const result = cup.results?.[matchId];
+
+      if (teams.length === 2) {
+        fixtures.push({
+          competition: 'PSL Cup',
+          round: round.name,
+          gameweek: `PSL Cup · ${round.name}`,
+          h: normalizePitchballTeamName(home),
+          a: normalizePitchballTeamName(away),
+          completed: Boolean(result?.winner)
+        });
+        advancingTeams.push(result?.winner ? normalizePitchballTeamName(result.winner) : null);
+      } else {
+        advancingTeams.push(teams.length === 1 ? normalizePitchballTeamName(teams[0]) : null);
+      }
+    }
+    entrants = advancingTeams;
+  });
+  return fixtures;
+}
+
+async function loadPitchballFixtures() {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 12000);
+  try {
+    const response = await fetch('https://pitchball.gr/psl6/table.html', {
+      cache: 'no-store',
+      signal: controller.signal
+    });
+    if (!response.ok) throw new Error(`Pitchball returned HTTP ${response.status}.`);
+    const html = await response.text();
+    const teamNames = parsePitchballAssignment(html, 'TEAMS');
+    const fixtures = parsePitchballAssignment(html, 'rawFixtures');
+    const matchesResponse = await fetch(FANTASY_DB_URL, {
+      cache: 'no-store',
+      signal: controller.signal
+    });
+    if (!matchesResponse.ok) throw new Error(`Pitchball match data returned HTTP ${matchesResponse.status}.`);
+    const matchData = await matchesResponse.json();
+    const cupFixtures = buildPitchballCupFixtures(matchData?.psl6Cup);
+    if (!Array.isArray(fixtures) || fixtures.length === 0) {
+      throw new Error('Pitchball did not provide any fixtures.');
+    }
+    const invalidFixture = fixtures.find((fixture) =>
+      !Number.isInteger(Number(fixture.md)) || !teamNames[fixture.h] || !teamNames[fixture.a]
+    );
+    if (invalidFixture) throw new Error('Pitchball returned a fixture with an unknown matchday or team.');
+    const groupFixtures = FANTASY_GROUP_STAGE_FIXTURES.map((fixture) => ({
+      ...fixture,
+      competition: 'PSL6 Group Stage',
+      gameweek: `Group Stage · Matchday ${fixture.md}`,
+      completed: true
+    }));
+    const leagueFixtures = fixtures.map((fixture, index) => {
+      const savedMatch = matchData?.matches?.[2000 + index];
+      const hs = savedMatch?.hs !== undefined && savedMatch.hs !== null ? savedMatch.hs : fixture.hs;
+      const as = savedMatch?.as !== undefined && savedMatch.as !== null ? savedMatch.as : fixture.as;
+      const inProgress = Boolean(savedMatch?.inProgress || fixture.inProgress);
+      return {
+        competition: 'League Phase',
+        md: Number(fixture.md),
+        gameweek: `League Phase · Matchday ${fixture.md}`,
+        h: teamNames[fixture.h],
+        a: teamNames[fixture.a],
+        hs,
+        as,
+        inProgress,
+        completed: !inProgress && hs !== null && hs !== undefined && hs !== ''
+          && as !== null && as !== undefined && as !== ''
+      };
+    });
+    FANTASY_FIXTURES = [...groupFixtures, ...cupFixtures, ...leagueFixtures];
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+function getFantasyPlayerFixturesForMatchday(player, matchdayId = viewedFantasyMatchdayId) {
+  const fixtures = getFantasyPlayerFixtures(player);
+  if (!getPlayerAvailability(player.id, matchdayId)) return fixtures;
+
+  const matchdayIndex = getOrderedFantasyMatchdays()
+    .findIndex((matchday) => String(matchday.id) === String(matchdayId));
+  if (matchdayIndex < 0 || !fixtures[matchdayIndex] || fixtures[matchdayIndex].blank) return fixtures;
+  return fixtures.filter((_, index) => index !== matchdayIndex);
+}
+
 function getFantasyNextFixture(player) {
-  const matchdays = getOrderedFantasyMatchdays();
-  const activeIndex = matchdays.findIndex((matchday) => matchday.status === 'active');
-  const draftIndex = matchdays.findIndex((matchday) => matchday.status === 'draft');
-  const lastEndedIndex = matchdays.map((matchday) => matchday.status).lastIndexOf('ended');
-  const nextMatchdayNumber = activeIndex >= 0
-    ? activeIndex + 1
-    : draftIndex >= 0
-      ? draftIndex + 1
-      : lastEndedIndex >= 0
-        ? lastEndedIndex + 2
-        : 1;
-  return getFantasyPlayerFixtures(player)
-    .find((fixture) => fixture.gameweek === `Matchday ${nextMatchdayNumber}`) || null;
+  return getFantasyPlayerFixturesForMatchday(player)
+    .find((fixture) => !fixture.completed) || null;
 }
 
 async function getFantasyDb() {
@@ -297,7 +408,14 @@ async function loadFantasyState() {
     viewedFantasyMatchdayId = storedViewedMatchday?.id || fantasyMatchday?.id || selectedFantasyMatchdayId;
     if (!Array.isArray(db.fantasyMatchdays) && fantasyMatchdays.length > 0) {
       const { fantasyMatchday: legacyMatchday, ...currentDb } = db;
-      db = { ...currentDb, fantasyMatchdays, fantasyAdminState: { selectedMatchdayId: selectedFantasyMatchdayId } };
+      db = {
+        ...currentDb,
+        fantasyMatchdays,
+        fantasyAdminState: {
+          ...(db.fantasyAdminState || {}),
+          selectedMatchdayId: selectedFantasyMatchdayId
+        }
+      };
       await saveFantasyDb(db);
     }
     const currentUser = getCurrentFantasyUser();
@@ -371,6 +489,7 @@ function applyAggregatedPlayerStats(matchdays) {
       goals: total.goals,
       ownGoals: total.ownGoals,
       mvps: total.mvps,
+      seasonPoints: total.points.reduce((sum, points) => sum + points, 0),
       lastFiveMatches: total.points.slice(-5),
       matchdayPoints: total.points[total.points.length - 1] || 0
     });
@@ -805,6 +924,14 @@ async function submitFantasyAuth(form) {
 
 document.addEventListener('DOMContentLoaded', async () => {
   await loadFantasyState();
+  if (document.body.dataset.page === 'players') {
+    try {
+      await loadPitchballFixtures();
+    } catch (error) {
+      pitchballFixturesUnavailable = true;
+      console.error('Unable to load current fixtures from pitchball.gr.', error);
+    }
+  }
   const navLinks = document.querySelectorAll('.nav-link');
   navLinks.forEach((link) => {
     if (link.href === window.location.href || link.getAttribute('href') === window.location.pathname.split('/').pop()) {
@@ -1828,6 +1955,7 @@ function renderPlayersTable() {
     { key: 'ownGoals', label: 'OG', type: 'number' },
     { key: 'mvps', label: 'MVPs', type: 'number' },
     { key: 'fantasyPoints', label: 'Matchday Pts', type: 'number' },
+    { key: 'seasonPoints', label: 'Overall Pts', type: 'number' },
     { key: 'selectionPercentage', label: 'Selected By', type: 'number' },
     { key: 'ownershipTrend', label: 'Ownership Trend', type: 'number' },
     { key: 'fixtureDifficulty', label: 'Next Fixture', type: 'number' }
@@ -1850,6 +1978,7 @@ function renderPlayersTable() {
         ownGoals: Number(player.ownGoals) || 0,
         mvps: Number(player.mvps) || 0,
         fantasyPoints: getPlayerMatchdayPoints(player),
+        seasonPoints: getPlayerFantasyPoints(player),
         selectionPercentage: stats.percentage,
         ownershipTrend: ownershipTrends.get(player.id) || 0,
         fixtureDifficulty: nextFixtures.get(player.id) ? getFantasyFixtureDifficulty(nextFixtures.get(player.id).opponent) : 0
@@ -1887,13 +2016,14 @@ function renderPlayersTable() {
           <td>${player.ownGoals}</td>
           <td>${player.mvps}</td>
           <td>${getPlayerMatchdayPoints(player)}</td>
+          <td>${getPlayerFantasyPoints(player)}</td>
           <td><strong>${selectionStats.get(player.id).percentage}%</strong><small class="selection-rate-count">${selectionStats.get(player.id).selectedCount}/${managerCount} managers</small></td>
           <td>${ownershipTrends.get(player.id) === null
             ? '<span class="ownership-trend neutral">-</span>'
             : `<strong class="ownership-trend ${ownershipTrends.get(player.id) > 0 ? 'up' : ownershipTrends.get(player.id) < 0 ? 'down' : 'neutral'}">${ownershipTrends.get(player.id) > 0 ? '+' : ''}${ownershipTrends.get(player.id)}%</strong><small class="selection-rate-count">this matchday</small>`}</td>
           <td>${nextFixtures.get(player.id)
             ? `<span class="next-fixture-logo" title="${nextFixtures.get(player.id).opponent}"><img src="${getTeamLogoPath(nextFixtures.get(player.id).opponent)}" alt="${nextFixtures.get(player.id).opponent}" loading="lazy" onerror="this.remove()"><small class="fixture-difficulty difficulty-${getFantasyFixtureDifficulty(nextFixtures.get(player.id).opponent)}">${getFantasyFixtureDifficulty(nextFixtures.get(player.id).opponent)}/5</small></span>`
-            : '<span class="ownership-trend neutral">No fixture</span>'}</td>
+            : `<span class="ownership-trend neutral">${pitchballFixturesUnavailable ? 'Fixtures unavailable' : 'No fixture'}</span>`}</td>
         </tr>
       `).join('')}
     </tbody>
@@ -1925,7 +2055,7 @@ function openPlayerDetails(playerId) {
   if (!player || !overlay || !content) return;
 
   const name = formatPlayerName(player);
-  const fixtures = getFantasyPlayerFixtures(player);
+  const fixtures = getFantasyPlayerFixturesForMatchday(player);
   const recentPoints = getPlayerMatchPoints(player).slice(-5);
   const availability = getPlayerAvailability(player.id);
   const availabilityReason = availability?.reason
@@ -1933,8 +2063,12 @@ function openPlayerDetails(playerId) {
     : '';
   const trend = recentPoints.length ? recentPoints.map((points) => `<span>${points}</span>`).join('') : '<span class="detail-empty">No matchday points yet</span>';
   const fixtureMarkup = fixtures.length
-    ? fixtures.slice(0, 6).map((fixture) => `<div class="fixture-card"><small>${fixture.gameweek || 'Next'} · Difficulty ${getFantasyFixtureDifficulty(fixture.opponent)}/5</small><div class="fixture-teams"><span><img src="${getTeamLogoPath(player.team)}" alt="" loading="lazy" onerror="this.remove()">${player.team || 'TBC'}</span><b>vs</b><span><img src="${getTeamLogoPath(fixture.opponent)}" alt="" loading="lazy" onerror="this.remove()">${fixture.opponent || 'TBC'}</span></div></div>`).join('')
-    : '<p class="detail-empty">Fixtures will appear when matchday schedules are added.</p>';
+    ? fixtures.map((fixture) => fixture.blank
+      ? `<div class="fixture-card"><small>${escapeFantasyHtml(fixture.gameweek)}</small><div class="fixture-teams"></div></div>`
+      : `<div class="fixture-card"><small>${escapeFantasyHtml(fixture.gameweek)} · Difficulty ${getFantasyFixtureDifficulty(fixture.opponent)}/5</small><div class="fixture-teams"><span><img src="${getTeamLogoPath(player.team)}" alt="" loading="lazy" onerror="this.remove()">${escapeFantasyHtml(player.team || 'TBC')}</span><b>vs</b><span><img src="${getTeamLogoPath(fixture.opponent)}" alt="" loading="lazy" onerror="this.remove()">${escapeFantasyHtml(fixture.opponent || 'TBC')}</span></div></div>`).join('')
+    : pitchballFixturesUnavailable
+      ? '<p class="detail-empty">Unable to load fixtures from pitchball.gr.</p>'
+      : '<p class="detail-empty">No upcoming fixtures for this team.</p>';
   const photoPath = getPlayerPhotoPath(player);
   const selectedTeam = getFantasyBuilderTeam();
   const selectedIndex = selectedTeam.indexOf(player.id);
@@ -1968,10 +2102,57 @@ function openPlayerDetails(playerId) {
       <div><small>Matchday points</small><strong>${getPlayerMatchdayPoints(player)}</strong></div>
     </div>
     <section class="detail-section"><div class="detail-section-heading"><h3>Recent form</h3><span>Last ${recentPoints.length || 0} matches</span></div><div class="points-strip">${trend}</div></section>
-    <section class="detail-section"><div class="detail-section-heading"><h3>Fixtures</h3><span>Upcoming</span></div><div class="fixture-grid">${fixtureMarkup}</div></section>
+    <section class="detail-section">
+      <div class="detail-section-heading"><h3>Season fixtures</h3><span>Group Stage · PSL Cup · League Phase</span></div>
+      <div class="fixture-grid" data-fixture-carousel role="region" aria-label="Season fixtures" tabindex="0">${fixtureMarkup}</div>
+      ${fixtures.length ? `
+        <div class="fixture-carousel-controls">
+          <button class="fixture-carousel-control" type="button" data-fixture-previous aria-label="Previous five fixtures">Previous 5</button>
+          <span data-fixture-range aria-live="polite"></span>
+          <button class="fixture-carousel-control" type="button" data-fixture-next aria-label="Next five fixtures">Next 5</button>
+        </div>
+      ` : ''}
+    </section>
     <div class="detail-stat-grid"><div><small>Goals</small><strong>${player.goals || 0}</strong></div><div><small>Own goals</small><strong>${player.ownGoals || 0}</strong></div><div><small>MVPs</small><strong>${player.mvps || 0}</strong></div></div>
   `;
   overlay.hidden = false;
+  initializeFixtureCarousel(content);
+}
+
+function initializeFixtureCarousel(content) {
+  const track = content.querySelector('[data-fixture-carousel]');
+  if (!track) return;
+  const previous = content.querySelector('[data-fixture-previous]');
+  const next = content.querySelector('[data-fixture-next]');
+  const range = content.querySelector('[data-fixture-range]');
+  if (!previous || !next || !range) return;
+  const cards = [...track.querySelectorAll('.fixture-card')];
+  const fixtureCount = cards.length;
+  const updateControls = () => {
+    const trackBounds = track.getBoundingClientRect();
+    const firstVisibleIndex = cards.findIndex((card) => card.getBoundingClientRect().right > trackBounds.left + 1);
+    const first = Math.max(1, firstVisibleIndex + 1);
+    range.textContent = `${first}–${Math.min(fixtureCount, first + 4)} of ${fixtureCount}`;
+    previous.disabled = track.scrollLeft <= 1;
+    next.disabled = track.scrollLeft + track.clientWidth >= track.scrollWidth - 1;
+  };
+  const scrollByFive = (direction) => {
+    track.scrollLeft = Math.max(
+      0,
+      Math.min(track.scrollLeft + direction * track.clientWidth, track.scrollWidth - track.clientWidth)
+    );
+    updateControls();
+  };
+
+  previous.addEventListener('click', () => scrollByFive(-1));
+  next.addEventListener('click', () => scrollByFive(1));
+  track.addEventListener('scroll', updateControls, { passive: true });
+  track.addEventListener('keydown', (event) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    event.preventDefault();
+    scrollByFive(event.key === 'ArrowRight' ? 1 : -1);
+  });
+  updateControls();
 }
 
 window.openPlayerDetails = openPlayerDetails;
@@ -2098,6 +2279,29 @@ function renderAdminPlayers() {
       });
     });
   });
+}
+
+function readAdminPlayerAvailability(existing = {}) {
+  const playerAvailability = { ...existing };
+  document.querySelectorAll('.admin-player-row').forEach((row) => {
+    const playerId = row.dataset.playerId;
+    const availabilityStatus = row.querySelector('[data-availability-status]')?.value || 'available';
+    if (availabilityStatus === 'injured') {
+      playerAvailability[playerId] = { status: 'injured' };
+    } else if (availabilityStatus === 'unavailable') {
+      const chanceValue = row.querySelector('[data-availability-chance]')?.value.trim();
+      const chance = chanceValue === '' ? 100 : Number(chanceValue);
+      const reason = row.querySelector('[data-availability-reason]')?.value.trim() || '';
+      playerAvailability[playerId] = {
+        status: 'unavailable',
+        chance: Math.max(0, Math.min(100, Number.isFinite(chance) ? chance : 100)),
+        ...(reason ? { reason } : {})
+      };
+    } else {
+      delete playerAvailability[playerId];
+    }
+  });
+  return playerAvailability;
 }
 
 function renderAdminTeams(selectedUsername) {
@@ -2232,7 +2436,8 @@ async function createFantasyMatchday() {
       : null,
     status: 'draft',
     order: fantasyMatchdays.reduce((highest, current, index) => Math.max(highest, Number(current.order ?? index)), -1) + 1,
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    playerAvailability: { ...(db.fantasyAdminState?.playerAvailabilityDefaults || {}) }
   };
   fantasyMatchdays = [...fantasyMatchdays, matchday];
   selectedFantasyMatchdayId = matchday.id;
@@ -2385,7 +2590,6 @@ async function saveFantasyPlayerStats() {
   }
   const db = await getFantasyDb();
   const playerStats = { ...(selected.playerStats || {}) };
-  const playerAvailability = { ...(selected.playerAvailability || {}) };
   document.querySelectorAll('.admin-player-row').forEach((row) => {
     const playerId = row.dataset.playerId;
     const stats = {};
@@ -2394,22 +2598,8 @@ async function saveFantasyPlayerStats() {
     });
     const existing = playerStats[playerId] || {};
     playerStats[playerId] = { ...existing, ...stats };
-    const availabilityStatus = row.querySelector('[data-availability-status]')?.value || 'available';
-    if (availabilityStatus === 'injured') {
-      playerAvailability[playerId] = { status: 'injured' };
-    } else if (availabilityStatus === 'unavailable') {
-      const chanceValue = row.querySelector('[data-availability-chance]')?.value.trim();
-      const chance = chanceValue === '' ? 100 : Number(chanceValue);
-      const reason = row.querySelector('[data-availability-reason]')?.value.trim() || '';
-      playerAvailability[playerId] = {
-        status: 'unavailable',
-        chance: Math.max(0, Math.min(100, Number.isFinite(chance) ? chance : 100)),
-        ...(reason ? { reason } : {})
-      };
-    } else {
-      delete playerAvailability[playerId];
-    }
   });
+  const playerAvailability = readAdminPlayerAvailability(selected.playerAvailability);
   fantasyMatchdays = fantasyMatchdays.map((matchday) => matchday.id === selected.id ? { ...matchday, playerStats, playerAvailability } : matchday);
   const users = { ...(db.users || {}) };
   recalculateManagerTotals(users, fantasyMatchdays);
@@ -2417,6 +2607,29 @@ async function saveFantasyPlayerStats() {
   applyAggregatedPlayerStats(fantasyMatchdays);
   renderPlayersTable();
   alert('Player stats and availability saved.');
+}
+
+async function applyFantasyAvailabilityToAllMatchdays() {
+  if (!isFantasyAdmin()) return;
+  if (!fantasyMatchdays.some((matchday) => String(matchday.id) === String(selectedFantasyMatchdayId))) {
+    alert('Create or select a matchday first.');
+    return;
+  }
+  if (!confirm('Apply these availability choices to every existing and future matchday? This replaces availability settings for all matchdays; player stats are unchanged.')) return;
+
+  const playerAvailability = readAdminPlayerAvailability();
+  const db = await getFantasyDb();
+  fantasyMatchdays = fantasyMatchdays.map((matchday) => ({
+    ...matchday,
+    playerAvailability: { ...playerAvailability }
+  }));
+  const fantasyAdminState = {
+    ...(db.fantasyAdminState || {}),
+    playerAvailabilityDefaults: { ...playerAvailability }
+  };
+  await saveFantasyDb({ ...db, fantasyMatchdays, fantasyAdminState });
+  renderAdminPlayers();
+  alert('Player availability applied to all existing and future matchdays.');
 }
 
 function initAdminPage() {
@@ -2463,4 +2676,7 @@ function initAdminPage() {
   document.getElementById('admin-end-matchday')?.addEventListener('click', () => endFantasyMatchday().catch((error) => alert(error.message)));
   document.getElementById('admin-delete-matchday')?.addEventListener('click', () => deleteFantasyMatchday().catch((error) => alert(error.message)));
   document.getElementById('admin-save-stats')?.addEventListener('click', () => saveFantasyPlayerStats().catch((error) => alert(error.message)));
+  document.getElementById('admin-apply-availability-all')?.addEventListener('click', () => {
+    applyFantasyAvailabilityToAllMatchdays().catch((error) => alert(error.message || 'Unable to apply availability to all matchdays.'));
+  });
 }
