@@ -4,6 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Pitchball Fantasy | Leaderboard</title>
+  <meta name="theme-color" content="#05010f" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" type="image/png" href="pitchball%20fantasy.png">
+  <link rel="apple-touch-icon" href="icons/pitchball-192.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -12,10 +18,10 @@
 <body data-page="leaderboard">
   <div class="fantasy-shell">
     <header class="topbar">
-      <div class="brand">
-        <div class="brand-mark">P</div>
+      <a href="index.html" class="brand">
+        <img class="brand-logo" src="pitchball%20fantasy.png" alt="">
         <span>Pitchball Fantasy</span>
-      </div>
+      </a>
       <nav class="topnav">
         <a href="index.html" class="nav-link">Index</a>
         <a href="fantasy-build.html" class="nav-link">Build Your Team</a>
@@ -96,5 +102,6 @@
 
   <script src="fantasy-data.js"></script>
   <script src="fantasy-app.js"></script>
+  <script src="pwa.js"></script>
 </body>
 </html>

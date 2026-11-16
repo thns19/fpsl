@@ -4,13 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Pitchball Fantasy</title>
+<meta name="theme-color" content="#05010f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="pitchball%20fantasy.png">
+<link rel="apple-touch-icon" href="icons/pitchball-192.png">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
     --space-dark: #05010f;
     --panel: rgba(255, 255, 255, 0.03);
-    --neon-purple: #b366ff;
-    --neon-cyan: #00f0ff;
+    --neon-purple: #a64de8;
+    --neon-cyan: #b45df2;
     --accent-gold: #ffd166;
     --accent-green: #39ff88;
     --accent-pink: #ff5fa2;
@@ -62,8 +68,8 @@
   .stars::after {
     width: 3px; height: 3px;
     box-shadow:
-      25vw 15vh var(--neon-cyan), 75vw 85vh var(--neon-purple), 5vw 50vh var(--neon-cyan),
-      55vw 95vh var(--neon-purple), 45vw 35vh var(--neon-cyan), 85vw 55vh var(--neon-purple);
+      25vw 15vh var(--accent-gold), 75vw 85vh var(--neon-purple), 5vw 50vh var(--neon-purple),
+      55vw 95vh var(--neon-purple), 45vw 35vh var(--accent-gold), 85vw 55vh var(--neon-purple);
     animation: twinkle 3s infinite alternate-reverse;
   }
   @keyframes twinkle {
@@ -128,7 +134,7 @@
     margin-bottom: 0.6rem;
     line-height: 1.05;
   }
-  .title span { color: var(--neon-cyan); font-weight: 700; text-shadow: 0 0 24px rgba(0,240,255,0.4); }
+  .title span { color: var(--neon-purple); font-weight: 700; text-shadow: 0 0 24px rgba(166,77,232,0.4); }
   .subtitle {
     font-size: 1rem;
     color: var(--text-muted);
@@ -259,15 +265,12 @@
     text-transform: uppercase;
     white-space: nowrap;
   }
-  .brand-mark {
-    display: grid;
-    place-items: center;
-    width: 34px;
-    height: 34px;
-    border-radius: 10px;
-    background: linear-gradient(135deg, var(--neon-cyan), var(--neon-purple));
-    color: var(--space-dark);
-    font-weight: 800;
+  .brand-logo {
+    width: 40px;
+    height: 40px;
+    object-fit: contain;
+    filter: drop-shadow(0 0 8px rgba(179, 102, 255, 0.35));
+    flex-shrink: 0;
   }
   .site-topbar .topnav { margin: 0; justify-content: flex-end; }
   .site-link { color: var(--text-muted); font-size: 0.8rem; text-decoration: none; white-space: nowrap; }
@@ -278,7 +281,7 @@
   .section-intro { max-width: 620px; margin: -0.35rem 0 1rem; color: var(--text-muted); line-height: 1.6; font-size: 0.9rem; }
   .rule-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 24px; list-style: none; }
   .rule-list li { position: relative; padding-left: 18px; color: var(--text-muted); line-height: 1.55; font-size: 0.88rem; }
-  .rule-list li::before { content: ''; position: absolute; left: 0; top: 0.65em; width: 6px; height: 6px; border-radius: 50%; background: var(--neon-cyan); box-shadow: 0 0 8px rgba(0,240,255,0.5); }
+  .rule-list li::before { content: ''; position: absolute; left: 0; top: 0.65em; width: 6px; height: 6px; border-radius: 50%; background: var(--neon-cyan); box-shadow: 0 0 8px rgba(180,93,242,0.5); }
   @media (max-width: 760px) {
     .site-topbar { align-items: flex-start; flex-direction: column; margin-bottom: 2.5rem; }
     .site-topbar .topnav { justify-content: flex-start; }
@@ -293,7 +296,7 @@
 
 <div class="container">
   <div class="site-topbar">
-    <a href="index.html" class="brand"><span class="brand-mark">P</span><span>Pitchball Fantasy</span></a>
+    <a href="index.html" class="brand"><img class="brand-logo" src="pitchball%20fantasy.png" alt=""><span>Pitchball Fantasy</span></a>
     <nav class="topnav" aria-label="Fantasy pages">
     <a href="index.html" class="nav-link active" aria-current="page">Index</a>
     <a href="fantasy-build.html" class="nav-link">Build Your Team</a>
@@ -441,9 +444,9 @@ function pslSaveSession(u){localStorage.setItem('psl_session',JSON.stringify(u))
 function pslClearSession(){localStorage.removeItem('psl_session');}
 async function pslHashPass(pass){const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(pass+'psl5salt'));return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');}
 
-function injectAuthStyles(){if(document.getElementById('psl-auth-styles'))return;const s=document.createElement('style');s.id='psl-auth-styles';s.textContent=`#psl-auth-widget{position:fixed;top:12px;right:14px;z-index:99999;font-family:'Space Grotesk',sans-serif;}.psl-aw-btn{display:flex;align-items:center;gap:7px;background:rgba(10,5,20,0.85);border:1px solid rgba(255,255,255,0.15);border-radius:20px;padding:6px 12px 6px 8px;cursor:pointer;backdrop-filter:blur(8px);font-size:12px;color:#fff;font-weight:500;}.psl-aw-btn:hover{border-color:rgba(0,240,255,0.5);}.psl-aw-avatar{width:22px;height:22px;border-radius:50%;background:#00f0ff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#000;flex-shrink:0;}.psl-aw-avatar.guest{background:rgba(255,255,255,0.15);color:#fff;font-size:13px;}.psl-aw-drop{position:absolute;top:calc(100% + 8px);right:0;background:#0a0518;border:1px solid rgba(255,255,255,0.12);border-radius:12px;overflow:hidden;min-width:220px;box-shadow:0 8px 32px rgba(0,0,0,0.5);display:none;}.psl-aw-drop.open{display:block;}.psl-aw-drop-header{padding:12px 14px;border-bottom:1px solid rgba(255,255,255,0.08);font-size:12px;color:rgba(255,255,255,0.4);display:flex;align-items:center;gap:10px;}.psl-aw-drop-header strong{display:block;font-size:14px;color:#fff;margin-bottom:1px;}.psl-aw-drop-item{display:block;width:100%;padding:11px 14px;font-size:13px;font-weight:500;color:#fff;background:none;border:none;cursor:pointer;text-align:left;transition:background 0.1s;font-family:inherit;text-decoration:none;}.psl-aw-drop-item:hover{background:rgba(255,255,255,0.06);}.psl-aw-drop-item.danger{color:#ff5fa2;}.psl-aw-divider{border:none;border-top:1px solid rgba(255,255,255,0.08);margin:2px 0;}.psl-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:100000;display:flex;align-items:center;justify-content:center;padding:1rem;}.psl-modal{background:#0a0518;border:1px solid rgba(255,255,255,0.12);border-radius:16px;width:100%;max-width:380px;overflow:hidden;}.psl-modal-hd{padding:1.25rem 1.5rem;border-bottom:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:space-between;}.psl-modal-title{font-size:16px;font-weight:600;color:#fff;}.psl-modal-close{background:none;border:none;color:rgba(255,255,255,0.4);cursor:pointer;font-size:20px;line-height:1;padding:2px;font-family:inherit;}.psl-modal-bd{padding:1.5rem;}.psl-form-group{margin-bottom:14px;}.psl-label{font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:5px;display:block;font-weight:500;}.psl-input{width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:#fff;border-radius:8px;padding:9px 12px;font-size:13px;font-family:inherit;box-sizing:border-box;}.psl-input:focus{outline:none;border-color:#00f0ff;}.psl-input::placeholder{color:rgba(255,255,255,0.3);}.psl-btn-primary{width:100%;padding:10px;background:#00f0ff;color:#000;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;}.psl-btn-primary:hover{background:#33f3ff;}.psl-btn-primary:disabled{opacity:0.4;cursor:not-allowed;}.psl-err{font-size:11px;color:#ff5fa2;margin-top:6px;}.psl-ok{font-size:11px;color:#39ff88;margin-top:6px;}.psl-tabs{display:flex;margin-bottom:1.5rem;background:rgba(255,255,255,0.06);border-radius:8px;padding:3px;gap:3px;}.psl-tab{flex:1;padding:7px;border:none;background:none;border-radius:6px;font-size:12px;font-weight:600;color:rgba(255,255,255,0.4);cursor:pointer;font-family:inherit;}.psl-tab.active{background:#00f0ff;color:#000;}.psl-avatar-preview{width:72px;height:72px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,0.15);display:block;margin:0 auto 12px;}`;document.head.appendChild(s);}
+function injectAuthStyles(){if(document.getElementById('psl-auth-styles'))return;const s=document.createElement('style');s.id='psl-auth-styles';s.textContent=`#psl-auth-widget{position:fixed;top:12px;right:14px;z-index:99999;font-family:'Space Grotesk',sans-serif;}.psl-aw-btn{display:flex;align-items:center;gap:7px;background:rgba(10,5,20,0.85);border:1px solid rgba(255,255,255,0.15);border-radius:20px;padding:6px 12px 6px 8px;cursor:pointer;backdrop-filter:blur(8px);font-size:12px;color:#fff;font-weight:500;}.psl-aw-btn:hover{border-color:rgba(180,93,242,0.5);}.psl-aw-avatar{width:22px;height:22px;border-radius:50%;background:#b45df2;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#000;flex-shrink:0;}.psl-aw-avatar.guest{background:rgba(255,255,255,0.15);color:#fff;font-size:13px;}.psl-aw-drop{position:absolute;top:calc(100% + 8px);right:0;background:#0a0518;border:1px solid rgba(255,255,255,0.12);border-radius:12px;overflow:hidden;min-width:220px;box-shadow:0 8px 32px rgba(0,0,0,0.5);display:none;}.psl-aw-drop.open{display:block;}.psl-aw-drop-header{padding:12px 14px;border-bottom:1px solid rgba(255,255,255,0.08);font-size:12px;color:rgba(255,255,255,0.4);display:flex;align-items:center;gap:10px;}.psl-aw-drop-header strong{display:block;font-size:14px;color:#fff;margin-bottom:1px;}.psl-aw-drop-item{display:block;width:100%;padding:11px 14px;font-size:13px;font-weight:500;color:#fff;background:none;border:none;cursor:pointer;text-align:left;transition:background 0.1s;font-family:inherit;text-decoration:none;}.psl-aw-drop-item:hover{background:rgba(255,255,255,0.06);}.psl-aw-drop-item.danger{color:#ff5fa2;}.psl-aw-divider{border:none;border-top:1px solid rgba(255,255,255,0.08);margin:2px 0;}.psl-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:100000;display:flex;align-items:center;justify-content:center;padding:1rem;}.psl-modal{background:#0a0518;border:1px solid rgba(255,255,255,0.12);border-radius:16px;width:100%;max-width:380px;overflow:hidden;}.psl-modal-hd{padding:1.25rem 1.5rem;border-bottom:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:space-between;}.psl-modal-title{font-size:16px;font-weight:600;color:#fff;}.psl-modal-close{background:none;border:none;color:rgba(255,255,255,0.4);cursor:pointer;font-size:20px;line-height:1;padding:2px;font-family:inherit;}.psl-modal-bd{padding:1.5rem;}.psl-form-group{margin-bottom:14px;}.psl-label{font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:5px;display:block;font-weight:500;}.psl-input{width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:#fff;border-radius:8px;padding:9px 12px;font-size:13px;font-family:inherit;box-sizing:border-box;}.psl-input:focus{outline:none;border-color:#b45df2;}.psl-input::placeholder{color:rgba(255,255,255,0.3);}.psl-btn-primary{width:100%;padding:10px;background:#b45df2;color:#000;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;}.psl-btn-primary:hover{background:#c276fa;}.psl-btn-primary:disabled{opacity:0.4;cursor:not-allowed;}.psl-err{font-size:11px;color:#ff5fa2;margin-top:6px;}.psl-ok{font-size:11px;color:#39ff88;margin-top:6px;}.psl-tabs{display:flex;margin-bottom:1.5rem;background:rgba(255,255,255,0.06);border-radius:8px;padding:3px;gap:3px;}.psl-tab{flex:1;padding:7px;border:none;background:none;border-radius:6px;font-size:12px;font-weight:600;color:rgba(255,255,255,0.4);cursor:pointer;font-family:inherit;}.psl-tab.active{background:#b45df2;color:#000;}.psl-avatar-preview{width:72px;height:72px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,0.15);display:block;margin:0 auto 12px;}`;document.head.appendChild(s);}
 
-function renderWidget(){if(!document.body){setTimeout(renderWidget,50);return;}const ex=document.getElementById('psl-auth-widget');if(ex)ex.remove();const adminNav=document.getElementById('admin-nav-link');if(adminNav)adminNav.style.display=pslCurrentUser?.isAdmin?'':'none';const w=document.createElement('div');w.id='psl-auth-widget';if(pslCurrentUser){const avatarBtn=pslCurrentUser.avatar?`<img src="${pslCurrentUser.avatar}" style="width:22px;height:22px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.outerHTML='<div class=psl-aw-avatar>${pslCurrentUser.username[0].toUpperCase()}</div>'">`:`<div class="psl-aw-avatar">${pslCurrentUser.username[0].toUpperCase()}</div>`;const avatarDrop=pslCurrentUser.avatar?`<img src="${pslCurrentUser.avatar}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;">`:`<div class="psl-aw-avatar" style="width:36px;height:36px;font-size:15px;">${pslCurrentUser.username[0].toUpperCase()}</div>`;w.innerHTML=`<div class="psl-aw-btn" onclick="pslToggleDrop()">${avatarBtn}<span>${pslCurrentUser.username}</span><span style="color:rgba(255,255,255,0.3);font-size:10px;">▾</span></div><div class="psl-aw-drop" id="psl-aw-drop"><div class="psl-aw-drop-header">${avatarDrop}<div><strong>${pslCurrentUser.username}</strong>${pslCurrentUser.isAdmin?'<span style="color:#00f0ff;font-size:10px;">⚡ Admin</span>':''}</div></div><hr class="psl-aw-divider"><button class="psl-aw-drop-item danger" onclick="pslLogout()">Sign out</button></div>`;}else{w.innerHTML=`<div class="psl-aw-btn" onclick="pslOpenAuth('login')"><div class="psl-aw-avatar guest">👤</div><span>Sign in</span></div>`;}document.body.appendChild(w);document.addEventListener('click',e=>{if(!w.contains(e.target)){const d=document.getElementById('psl-aw-drop');if(d)d.classList.remove('open');}},{capture:true});}
+function renderWidget(){if(!document.body){setTimeout(renderWidget,50);return;}const ex=document.getElementById('psl-auth-widget');if(ex)ex.remove();const adminNav=document.getElementById('admin-nav-link');if(adminNav)adminNav.style.display=pslCurrentUser?.isAdmin?'':'none';const w=document.createElement('div');w.id='psl-auth-widget';if(pslCurrentUser){const avatarBtn=pslCurrentUser.avatar?`<img src="${pslCurrentUser.avatar}" style="width:22px;height:22px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.outerHTML='<div class=psl-aw-avatar>${pslCurrentUser.username[0].toUpperCase()}</div>'">`:`<div class="psl-aw-avatar">${pslCurrentUser.username[0].toUpperCase()}</div>`;const avatarDrop=pslCurrentUser.avatar?`<img src="${pslCurrentUser.avatar}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;">`:`<div class="psl-aw-avatar" style="width:36px;height:36px;font-size:15px;">${pslCurrentUser.username[0].toUpperCase()}</div>`;w.innerHTML=`<div class="psl-aw-btn" onclick="pslToggleDrop()">${avatarBtn}<span>${pslCurrentUser.username}</span><span style="color:rgba(255,255,255,0.3);font-size:10px;">▾</span></div><div class="psl-aw-drop" id="psl-aw-drop"><div class="psl-aw-drop-header">${avatarDrop}<div><strong>${pslCurrentUser.username}</strong>${pslCurrentUser.isAdmin?'<span style="color:#b45df2;font-size:10px;">⚡ Admin</span>':''}</div></div><hr class="psl-aw-divider"><button class="psl-aw-drop-item danger" onclick="pslLogout()">Sign out</button></div>`;}else{w.innerHTML=`<div class="psl-aw-btn" onclick="pslOpenAuth('login')"><div class="psl-aw-avatar guest">👤</div><span>Sign in</span></div>`;}document.body.appendChild(w);document.addEventListener('click',e=>{if(!w.contains(e.target)){const d=document.getElementById('psl-aw-drop');if(d)d.classList.remove('open');}},{capture:true});}
 function pslToggleDrop(){document.getElementById('psl-aw-drop')?.classList.toggle('open');}
 
 let _authModal=null;
@@ -459,5 +462,6 @@ async function pslAuthInit(){injectAuthStyles();const session=pslLoadSession();i
 injectAuthStyles();
 document.addEventListener('DOMContentLoaded',pslAuthInit);
 </script>
+<script src="pwa.js"></script>
 </body>
 </html>
